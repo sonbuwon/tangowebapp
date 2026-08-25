@@ -101,6 +101,7 @@ html, body {
 }
 #quizResult.ok { color: #7fcf9a; }
 #quizResult.err { color: #e06b6b; }
+#quizResult .quiz-answer { font-size: 2em; margin-top: 4px; }
 #quizNext {
   margin-top: 12px; padding: 8px 22px;
   border: 1px solid var(--accent); border-radius: 18px;

@@ -803,7 +803,11 @@ quizForm.addEventListener("submit", (e) => {
       bookmarks.add(wordKey(w));
       localStorage.setItem(BM_KEY, JSON.stringify([...bookmarks]));
     }
-    quizResult.textContent = `오답입니다 ✕  정답: ${w.kana}${already ? "" : "  · 북마크 추가됨"}`;
+    quizResult.textContent = `오답입니다 ✕${already ? "" : "  북마크 추가됨."}`;
+    const answerLine = document.createElement("div");
+    answerLine.className = "quiz-answer";
+    answerLine.textContent = w.kana;
+    quizResult.appendChild(answerLine);
     quizResult.className = "err";
   }
   quizProgress.textContent = `${quizIdx + 1} / ${quizDeck.length}  ·  정답 ${quizScore}`;
