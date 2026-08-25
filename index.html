@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline';" />
+  <title>&nbsp;</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- 상단 드래그 바 (공용) -->
+  <div id="bar">
+    <span id="title">홈</span>
+    <button id="hideBtn" title="숨기기 (Esc)">✕</button>
+  </div>
+
+  <!-- ===== 홈 화면 (Alt+1) ===== -->
+  <div id="homeScreen" class="screen">
+    <div id="homeWrap">
+      <div class="home-head">
+        <div class="home-title">리스트</div>
+        <button type="button" id="reorderBtn" style="display:none">순서 변경</button>
+      </div>
+      <div id="reorderHint" style="display:none">끌어서 놓거나 ▲▼ 로 순서를 바꾸세요</div>
+      <div id="homeList"></div>
+    </div>
+  </div>
+
+  <!-- ===== 단어장(플래시카드/목록) 화면 (Alt+2) ===== -->
+  <div id="vocabScreen" class="screen" style="display:none">
+    <div id="controls">
+      <div class="modes">
+        <button class="mode-btn active" data-mode="list">목록</button>
+        <button class="mode-btn" data-mode="flash">플래시카드</button>
+      </div>
+      <div class="tools">
+        <button class="tool" id="hideMean">뜻 가리기</button>
+        <button class="tool" id="hideKana">히라가나 가리기</button>
+      </div>
+    </div>
+
+    <!-- 행 / 북마크 필터 -->
+    <div id="filters">
+      <div class="row-filters">
+        <button class="row-btn active" data-row="all">전체</button>
+        <button class="row-btn" data-row="あ">あ</button>
+        <button class="row-btn" data-row="か">か</button>
+        <button class="row-btn" data-row="さ">さ</button>
+        <button class="row-btn" data-row="た">た</button>
+        <button class="row-btn" data-row="な">な</button>
+        <button class="row-btn" data-row="は">は</button>
+        <button class="row-btn" data-row="ま">ま</button>
+        <button class="row-btn" data-row="や">や</button>
+        <button class="row-btn" data-row="ら">ら</button>
+        <button class="row-btn" data-row="わ">わ</button>
+      </div>
+      <button class="row-btn bm-filter" id="bmFilter" title="북마크만 보기">★ 북마크</button>
+    </div>
+
+    <div id="content">
+      <!-- 목록 모드 -->
+      <div id="list">
+        <div class="count" id="listCount"></div>
+        <div id="listBody"></div>
+      </div>
+
+      <!-- 플래시카드 모드 -->
+      <div id="flash">
+        <div class="flash-stage">
+          <div class="flashcard" id="flashcard">
+            <div class="fc-inner">
+              <div class="fc-face fc-front">
+                <button class="bm-btn fc-bm" id="fcBookmark" title="북마크">☆</button>
+                <div class="big-kana" id="fcKana"></div>
+                <div class="flip-hint">카드를 눌러 뜻 보기</div>
+              </div>
+              <div class="fc-face fc-back">
+                <div class="big-kanji" id="fcKanji"></div>
+                <div class="big-mean" id="fcMean"></div>
+              </div>
+            </div>
+          </div>
+          <div class="flash-nav">
+            <span class="progress" id="fcProgress"></span>
+          </div>
+          <div class="flash-controls">
+            <button class="flash-nav-btn" id="prevBtn" title="←">◀</button>
+            <button class="flash-shuffle" id="shuffleBtn">🔀 섞기</button>
+            <button class="flash-nav-btn" id="nextBtn" title="→">▶</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 단어 입력 화면 (Alt+2) ===== -->
+  <div id="inputScreen" class="screen" style="display:none">
+    <div id="inputWrap">
+      <form id="wordForm" autocomplete="off">
+        <div id="editHint" style="display:none"></div>
+        <label class="field">
+          <span>행 (かな로 자동 분류)</span>
+          <select id="inRow" tabindex="-1">
+            <option value="あ">あ</option>
+            <option value="か">か</option>
+            <option value="さ">さ</option>
+            <option value="た">た</option>
+            <option value="な">な</option>
+            <option value="は">は</option>
+            <option value="ま">ま</option>
+            <option value="や">や</option>
+            <option value="ら">ら</option>
+            <option value="わ">わ</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>かな <em>*</em></span>
+          <input id="inKana" type="text" placeholder="ひらがな / カタカナ" />
+        </label>
+        <label class="field">
+          <span>한자 (kanji)</span>
+          <input id="inKanji" type="text" placeholder="없으면 비워두세요" />
+        </label>
+        <label class="field">
+          <span>뜻 (mean) <em>*</em></span>
+          <input id="inMean" type="text" placeholder="한국어 뜻" />
+        </label>
+        <button type="submit" id="addBtn">추가</button>
+        <button type="button" id="cancelEditBtn" style="display:none">수정 취소</button>
+      </form>
+      <div id="addMsg"></div>
+
+      <input type="file" id="csvFile" accept=".csv,text/csv" style="display:none" />
+      <button type="button" id="importBtn">CSV 파일에서 추가</button>
+      <div id="importHelp">CSV 형식: 일본어단어 , 히라가나 , 한국어뜻</div>
+
+      <button type="button" id="manageBtn">단어 관리</button>
+      <div id="managePanel" style="display:none">
+        <div class="manage-top">
+          <span class="manage-count" id="manageCount"></span>
+          <button type="button" id="clearAllBtn">개별 전체 삭제</button>
+        </div>
+        <div class="manage-head">
+          <span>일본어</span><span>히라가나</span><span>뜻</span><span></span>
+        </div>
+        <div id="manageList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 시험 화면 (Alt+5) — 북마크 단어만, 랜덤 출제 ===== -->
+  <div id="quizScreen" class="screen" style="display:none">
+    <!-- 시험 범위 선택 -->
+    <div id="quizPick">
+      <div class="home-title">시험 범위 선택</div>
+      <div id="quizPickList"></div>
+    </div>
+
+    <!-- 시험 진행 -->
+    <div id="quizWrap" style="display:none">
+      <div class="quiz-top">
+        <span class="quiz-scope" id="quizScope"></span>
+        <button type="button" id="quizBackBtn">범위 변경</button>
+      </div>
+      <div class="quiz-progress" id="quizProgress"></div>
+      <div class="quiz-card">
+        <div class="quiz-word" id="quizWord"></div>
+        <div class="quiz-mean" id="quizMean"></div>
+      </div>
+      <form id="quizForm" autocomplete="off">
+        <input id="quizInput" type="text" placeholder="히라가나 입력" />
+        <button type="submit" id="quizSubmit">제출</button>
+      </form>
+      <div id="quizResult"></div>
+      <button type="button" id="quizNext" style="display:none">다음 문제</button>
+      <div id="quizEmpty" class="empty-state" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- 글로벌 단축키 안내 (전 화면 하단 고정, 마우스 오버 시 표시) -->
+  <div id="shortcutBar">
+    <div class="sc-tab">⌨ 단축키</div>
+    <div class="sc-panel">
+      <div class="sc-group">
+        <span class="sc-glabel">전역</span>
+        <div class="sc-row"><span class="sc-key">Alt + Q</span>열기 / 숨기기</div>
+        <div class="sc-row"><span class="sc-key">Ctrl + Alt + H</span>즉시 숨기기</div>
+        <div class="sc-row"><span class="sc-key">Alt + 1</span>홈</div>
+        <div class="sc-row"><span class="sc-key">Alt + 2</span>단어장</div>
+        <div class="sc-row"><span class="sc-key">Alt + 3</span>플래시카드</div>
+        <div class="sc-row"><span class="sc-key">Alt + 4</span>단어 입력</div>
+        <div class="sc-row"><span class="sc-key">Alt + 5</span>시험</div>
+      </div>
+      <div class="sc-group">
+        <span class="sc-glabel">플래시카드</span>
+        <div class="sc-row"><span class="sc-key">← / →</span>이전 / 다음</div>
+        <div class="sc-row"><span class="sc-key">↑</span>카드 뒤집기</div>
+        <div class="sc-row"><span class="sc-key">B</span>북마크</div>
+        <div class="sc-row"><span class="sc-key">Ctrl + Q</span>섞기</div>
+        <div class="sc-row"><span class="sc-key">Esc</span>창 숨기기</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

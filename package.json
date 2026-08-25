@@ -1,0 +1,42 @@
+{
+  "name": "gm6",
+  "version": "1.0.0",
+  "description": "Discreet desktop mini-game with a boss-key.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.gm6.app",
+    "productName": "gm6",
+    "directories": {
+      "output": "dist"
+    },
+    "icon": "build/icon.png",
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "style.css",
+      "game.js",
+      "reader.js",
+      "sentences.js",
+      "icon.png"
+    ],
+    "extraResources": [
+      {
+        "from": "words.csv",
+        "to": "words.csv"
+      }
+    ],
+    "win": {
+      "target": "portable"
+    }
+  }
+}
