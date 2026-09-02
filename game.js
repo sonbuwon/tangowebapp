@@ -56,11 +56,22 @@ function loadBookmarks() {
 let bookmarks = loadBookmarks();
 function wordKey(w) { return `${w.kana}|${w.kanji || ""}`; }
 function isBookmarked(w) { return bookmarks.has(wordKey(w)); }
+/* 상단 북마크 필터 버튼에 현재 북마크 개수 표시 ('★ 15') */
+function updateBmCount() {
+  const btn = document.getElementById("bmFilter");
+  if (btn) btn.textContent = `★ ${bookmarks.size}`;
+}
+/* 북마크 저장 + 버튼 개수 갱신 (북마크 변경 시 항상 이 함수 사용) */
+function saveBookmarks() {
+  localStorage.setItem(BM_KEY, JSON.stringify([...bookmarks]));
+  updateBmCount();
+}
 function toggleBookmark(w) {
   const k = wordKey(w);
   if (bookmarks.has(k)) bookmarks.delete(k); else bookmarks.add(k);
-  localStorage.setItem(BM_KEY, JSON.stringify([...bookmarks]));
+  saveBookmarks();
 }
+updateBmCount();
 
 /* 행 / 북마크 / 리스트 필터 적용 */
 function filteredWords() {
@@ -330,7 +341,7 @@ wordForm.addEventListener("submit", (e) => {
     const oldBK = editingKey.kana + "|" + (editingKey.kanji || "");
     if (bookmarks.has(oldBK)) {
       bookmarks.delete(oldBK); bookmarks.add(wordKey(w));
-      localStorage.setItem(BM_KEY, JSON.stringify([...bookmarks]));
+      saveBookmarks();
     }
     showAddMsg(`수정됨 ✓  ${w.kanji || w.kana} — ${w.mean}`, true);
     resetForm();
@@ -468,7 +479,7 @@ clearAllBtn.onclick = () => {
   for (let i = WORDS.length - 1; i >= 0; i--) {
     if (!(WORDS[i].list || "")) { bookmarks.delete(wordKey(WORDS[i])); WORDS.splice(i, 1); }
   }
-  localStorage.setItem(BM_KEY, JSON.stringify([...bookmarks]));
+  saveBookmarks();
   if (currentList === "") currentList = null;
   resetForm();                         // 수정 중이었으면 해제
   showAddMsg("개별 전체 삭제됨 ✓", true);
@@ -524,7 +535,7 @@ function deleteWord(w) {
   const i = WORDS.findIndex(x => x.kana === w.kana && (x.kanji || "") === (w.kanji || ""));
   if (i >= 0) WORDS.splice(i, 1);
   bookmarks.delete(wordKey(w));        // 북마크에 있었다면 함께 제거
-  localStorage.setItem(BM_KEY, JSON.stringify([...bookmarks]));
+  saveBookmarks();
   // 수정 중이던 단어를 삭제하면 폼을 추가 모드로 되돌림
   if (editingKey && editingKey.kana === w.kana && (editingKey.kanji || "") === (w.kanji || "")) resetForm();
   showAddMsg(`삭제됨 ✓  ${w.kanji || w.kana}`, true);
@@ -660,7 +671,7 @@ function deleteList(name, label) {
   for (let i = WORDS.length - 1; i >= 0; i--) {
     if ((WORDS[i].list || "") === name) { bookmarks.delete(wordKey(WORDS[i])); WORDS.splice(i, 1); }
   }
-  localStorage.setItem(BM_KEY, JSON.stringify([...bookmarks]));
+  saveBookmarks();
   saveLists(loadLists().filter(m => m.name !== name));   // 리스트 메타 제거
   saveOrder(loadOrder().filter(n => n !== name));        // 저장된 순서에서도 제거
   if (currentList === name) currentList = null;
@@ -792,7 +803,7 @@ quizForm.addEventListener("submit", (e) => {
     const wasBookmarked = isBookmarked(w);
     if (wasBookmarked) {
       bookmarks.delete(wordKey(w));
-      localStorage.setItem(BM_KEY, JSON.stringify([...bookmarks]));
+      saveBookmarks();
     }
     quizResult.textContent = `정답입니다 ✓  ${w.kana}${wasBookmarked ? "  · 북마크 해제됨" : ""}`;
     quizResult.className = "ok";
@@ -801,7 +812,7 @@ quizForm.addEventListener("submit", (e) => {
     const already = isBookmarked(w);
     if (!already) {
       bookmarks.add(wordKey(w));
-      localStorage.setItem(BM_KEY, JSON.stringify([...bookmarks]));
+      saveBookmarks();
     }
     quizResult.textContent = `오답입니다 ✕${already ? "" : "  북마크 추가됨."}`;
     const answerLine = document.createElement("div");
