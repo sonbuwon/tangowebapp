@@ -66,17 +66,16 @@
       <!-- 플래시카드 모드 -->
       <div id="flash">
         <div class="flash-stage">
+          <!-- 앞면(일본어)만 보이다가 클릭 시 같은 카드 안에 히라가나·뜻이 펼쳐짐 -->
           <div class="flashcard" id="flashcard">
-            <div class="fc-inner">
-              <div class="fc-face fc-front">
-                <button class="bm-btn fc-bm" id="fcBookmark" title="북마크">☆</button>
-                <div class="big-kana" id="fcKana"></div>
-                <div class="flip-hint">카드를 눌러 뜻 보기</div>
-              </div>
-              <div class="fc-face fc-back">
+            <div class="fc-face">
+              <button class="bm-btn fc-bm" id="fcBookmark" title="북마크">☆</button>
+              <div class="big-kana" id="fcKana"></div>
+              <div class="fc-detail">
                 <div class="big-kanji" id="fcKanji"></div>
                 <div class="big-mean" id="fcMean"></div>
               </div>
+              <div class="flip-hint">카드를 눌러 뜻 보기</div>
             </div>
           </div>
           <div class="flash-nav">
@@ -193,7 +192,7 @@
       <div class="sc-group">
         <span class="sc-glabel">플래시카드</span>
         <div class="sc-row"><span class="sc-key">← / →</span>이전 / 다음</div>
-        <div class="sc-row"><span class="sc-key">↑</span>카드 뒤집기</div>
+        <div class="sc-row"><span class="sc-key">↑</span>뜻 보기/숨기기</div>
         <div class="sc-row"><span class="sc-key">B</span>북마크</div>
         <div class="sc-row"><span class="sc-key">Ctrl + Q</span>섞기</div>
         <div class="sc-row"><span class="sc-key">Esc</span>창 숨기기</div>

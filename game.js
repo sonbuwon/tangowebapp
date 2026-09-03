@@ -142,7 +142,7 @@ function showCard() {
   const fc = document.getElementById("flashcard");
   const bm = document.getElementById("fcBookmark");
   if (deck.length === 0) {
-    fc.classList.remove("flipped");
+    fc.classList.remove("revealed");
     document.getElementById("fcKana").textContent = "단어 없음";
     document.getElementById("fcKanji").textContent = "";
     document.getElementById("fcMean").textContent = bookmarkOnly ? "북마크한 단어가 없습니다." : "";
@@ -152,16 +152,17 @@ function showCard() {
   }
   bm.style.display = "flex";
   const w = deck[idx];
-  fc.classList.remove("flipped");
-  document.getElementById("fcKana").textContent = w.kanji || w.kana;  // 앞면: 한자 우선
-  document.getElementById("fcKanji").textContent = w.kana;            // 뒷면: 히라가나 읽는 법
+  fc.classList.remove("revealed");                                    // 새 카드는 일본어만 보이는 상태로
+  document.getElementById("fcKana").textContent = w.kanji || w.kana;  // 상단: 한자 우선
+  document.getElementById("fcKanji").textContent = w.kana;            // 펼침: 히라가나 읽는 법
   document.getElementById("fcMean").textContent = w.mean;
   document.getElementById("fcProgress").textContent = `${idx + 1} / ${deck.length}`;
   const marked = isBookmarked(w);
   bm.classList.toggle("on", marked);
   bm.textContent = marked ? "★" : "☆";
 }
-function flip() { if (deck.length) document.getElementById("flashcard").classList.toggle("flipped"); }
+/* 카드 클릭/↑ → 같은 화면에서 히라가나·뜻 펼치기/접기 */
+function flip() { if (deck.length) document.getElementById("flashcard").classList.toggle("revealed"); }
 function prev() { if (!deck.length) return; idx = (idx - 1 + deck.length) % deck.length; showCard(); }
 function next() { if (!deck.length) return; idx = (idx + 1) % deck.length; showCard(); }
 function shuffleDeck() {

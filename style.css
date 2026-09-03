@@ -468,24 +468,24 @@ html, body {
 /* ===== 플래시카드 모드 ===== */
 #flash { display: none; }
 .flash-stage { display: flex; flex-direction: column; align-items: center; margin-top: 8px; }
-.flashcard { width: 100%; max-width: 380px; min-height: 240px; perspective: 1200px; cursor: pointer; }
-.fc-inner {
-  position: relative; width: 100%; min-height: 240px;
-  transition: transform .5s; transform-style: preserve-3d;
-}
-.flashcard.flipped .fc-inner { transform: rotateY(180deg); }
+/* 뒤집기 대신 한 카드 안에서 펼쳐 보기: .revealed 가 붙으면 히라가나·뜻 표시 */
+.flashcard { width: 100%; max-width: 380px; cursor: pointer; }
 .fc-face {
-  position: absolute; width: 100%; height: 100%; min-height: 240px;
-  backface-visibility: hidden;
+  position: relative; width: 100%; min-height: 240px;
   background: var(--card); border: 2px solid var(--accent-light); border-radius: 16px;
-  padding: 22px; display: flex; flex-direction: column; justify-content: center; align-items: center;
+  padding: 22px 22px 34px; display: flex; flex-direction: column; justify-content: center; align-items: center;
   box-shadow: 0 6px 20px rgba(0,0,0,.3); text-align: center;
 }
-.fc-back { transform: rotateY(180deg); justify-content: center; }
 .fc-face .big-kana { font-size: 45px; font-weight: 600; }
 .fc-face .flip-hint { position: absolute; bottom: 14px; font-size: .72rem; color: var(--sub); }
-.fc-back .big-kanji { font-size: 25px; color: var(--accent); font-weight: 700; margin-bottom: 8px; }
-.fc-back .big-mean { font-size: 20px; }
+.fc-detail {
+  display: none; margin-top: 14px; padding-top: 14px; width: 100%;
+  border-top: 1px dashed var(--accent-light);
+}
+.flashcard.revealed .fc-detail { display: block; }
+.flashcard.revealed .flip-hint { display: none; }
+.fc-detail .big-kanji { font-size: 25px; color: var(--accent); font-weight: 700; margin-bottom: 8px; }
+.fc-detail .big-mean { font-size: 20px; }
 .flash-nav { display: flex; margin-top: 20px; align-items: center; justify-content: center; }
 .progress { font-size: 1rem; color: var(--sub); text-align: center; font-weight: 700; }
 .flash-controls {
