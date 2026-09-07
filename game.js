@@ -696,6 +696,7 @@ const quizInput = document.getElementById("quizInput");
 const quizSubmit = document.getElementById("quizSubmit");
 const quizResult = document.getElementById("quizResult");
 const quizNext = document.getElementById("quizNext");
+const quizBookmark = document.getElementById("quizBookmark");   // 정답 후 수동 북마크 추가
 const quizEmpty = document.getElementById("quizEmpty");
 
 let quizDeck = [];
@@ -766,7 +767,7 @@ function startQuiz(scope, label) {
   document.querySelector(".quiz-card").style.display = has ? "" : "none";
   quizForm.style.display = has ? "" : "none";
   if (has) showQuizCard();
-  else { quizResult.textContent = ""; quizNext.style.display = "none"; }
+  else { quizResult.textContent = ""; quizNext.style.display = "none"; quizBookmark.style.display = "none"; }
 }
 
 function showQuizCard() {
@@ -780,6 +781,7 @@ function showQuizCard() {
   quizInput.disabled = false;
   quizSubmit.disabled = false;
   quizNext.style.display = "none";
+  quizBookmark.style.display = "none";
   quizProgress.textContent = `${quizIdx + 1} / ${quizDeck.length}  ·  정답 ${quizScore}`;
   setTimeout(() => quizInput.focus(), 0);
 }
@@ -808,6 +810,11 @@ quizForm.addEventListener("submit", (e) => {
     }
     quizResult.textContent = `정답입니다 ✓  ${w.kana}${wasBookmarked ? "  · 북마크 해제됨" : ""}`;
     quizResult.className = "ok";
+    // 정답이어도 원하면 수동으로 북마크에 다시 넣을 수 있게 버튼 표시
+    quizBookmark.textContent = "☆ 북마크 추가";
+    quizBookmark.classList.remove("on");
+    quizBookmark.disabled = false;
+    quizBookmark.style.display = "";
   } else {
     // 오답 → 북마크에 추가 (이미 있으면 유지)
     const already = isBookmarked(w);
@@ -837,12 +844,27 @@ function goNextQuiz() {
     quizResult.className = "";
     quizForm.style.display = "none";
     quizNext.style.display = "none";
+    quizBookmark.style.display = "none";
     return;
   }
   quizIdx++;
   showQuizCard();
 }
 quizNext.onclick = goNextQuiz;
+
+// 정답 후 '북마크 추가' → 현재 단어를 북마크에 넣고 버튼을 완료 상태로
+quizBookmark.onclick = () => {
+  if (!quizAnswered || !quizDeck.length) return;
+  const w = quizDeck[quizIdx];
+  if (!isBookmarked(w)) {
+    bookmarks.add(wordKey(w));
+    saveBookmarks();
+  }
+  quizBookmark.textContent = "★ 북마크 추가됨";
+  quizBookmark.classList.add("on");
+  quizBookmark.disabled = true;
+  quizNext.focus();                                   // Enter로 바로 다음 문제 진행 가능
+};
 
 /* ===== 화면 전환 (1 홈 / 2 단어장 / 3 플래시카드 / 4 단어 입력 / 5 시험) =====
    vocab·flash 는 같은 단어장 화면을 쓰되 flash 는 플래시카드 모드로 진입 */

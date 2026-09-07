@@ -109,6 +109,15 @@ html, body {
   font-size: .85rem; font-weight: 600; cursor: pointer; transition: .15s;
 }
 #quizNext:hover { background: var(--accent-soft); }
+/* 정답 후 수동 북마크 추가 버튼 (다음 문제 버튼 아래) */
+#quizBookmark {
+  margin-top: 8px; padding: 6px 18px;
+  border: 1px solid var(--accent-light); border-radius: 18px;
+  background: transparent; color: var(--sub);
+  font-size: .8rem; font-weight: 600; cursor: pointer; transition: .15s;
+}
+#quizBookmark:hover { background: var(--accent-soft); color: var(--text); }
+#quizBookmark.on { color: var(--accent); border-color: var(--accent); cursor: default; }
 #quizEmpty { margin-top: 40px; line-height: 1.8; }
 
 /* ===== 글로벌 단축키 안내 바 (하단 고정, 호버 시 표시) ===== */
