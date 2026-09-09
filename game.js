@@ -71,6 +71,17 @@ function toggleBookmark(w) {
   if (bookmarks.has(k)) bookmarks.delete(k); else bookmarks.add(k);
   saveBookmarks();
 }
+/* 현재 words.csv 에 없는 단어의 북마크 키 정리
+   (words.csv 교체·외부 편집 등으로 남은 옛 데이터가 개수에 섞이지 않도록) */
+function pruneBookmarks() {
+  const valid = new Set(WORDS.map(wordKey));
+  let changed = false;
+  for (const k of bookmarks) {
+    if (!valid.has(k)) { bookmarks.delete(k); changed = true; }
+  }
+  if (changed) saveBookmarks();
+}
+pruneBookmarks();
 updateBmCount();
 
 /* 행 / 북마크 / 리스트 필터 적용 */
