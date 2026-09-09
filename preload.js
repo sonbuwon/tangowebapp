@@ -66,14 +66,17 @@ function loadWords() {
 }
 
 /* ── words.csv 에 단어 한 줄 추가 ────────────────────────────────
-   ex_jp/ex_hira/ex_kr 는 빈 값. 같은 row 블록 끝에 삽입해 정렬 유지. */
+   ex_jp/ex_hira/ex_kr 는 w.ex 가 있으면 기록, 없으면 빈 값.
+   같은 row 블록 끝에 삽입해 정렬 유지. */
 function csvEscape(v) {
   v = v == null ? '' : String(v);
   return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
 }
-// 단어 한 줄(8열) 생성. ex 3열은 비움, list 는 소속 리스트명
+// 단어 한 줄(8열) 생성. ex 3열은 w.ex {jp,hira,kr} 에서, list 는 소속 리스트명
 function wordLine(w) {
-  return [w.row, w.kana, w.kanji || '', w.mean || '', '', '', '', w.list || ''].map(csvEscape).join(',');
+  const ex = w.ex || {};
+  return [w.row, w.kana, w.kanji || '', w.mean || '', ex.jp || '', ex.hira || '', ex.kr || '', w.list || '']
+    .map(csvEscape).join(',');
 }
 function addWordToCsv(w) {
   try {

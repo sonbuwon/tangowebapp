@@ -71,9 +71,14 @@
             <div class="fc-face">
               <button class="bm-btn fc-bm" id="fcBookmark" title="북마크">☆</button>
               <div class="big-kana" id="fcKana"></div>
+              <!-- 예문(일본어 문장): '예문 보기' 체크 시 첫 화면부터 표시 -->
+              <div class="fc-ex fc-ex-jp" id="fcExJp"></div>
               <div class="fc-detail">
                 <div class="big-kanji" id="fcKanji"></div>
                 <div class="big-mean" id="fcMean"></div>
+                <!-- 예문(히라가나 문장 / 한국어 해석): 펼침 + '예문 보기' 체크 시 표시 -->
+                <div class="fc-ex fc-ex-hira" id="fcExHira"></div>
+                <div class="fc-ex fc-ex-kr" id="fcExKr"></div>
               </div>
               <div class="flip-hint">카드를 눌러 뜻 보기</div>
             </div>
@@ -86,6 +91,8 @@
             <button class="flash-shuffle" id="shuffleBtn">🔀 섞기</button>
             <button class="flash-nav-btn" id="nextBtn" title="→">▶</button>
           </div>
+          <!-- 예문 표시 여부 (localStorage 에 저장) -->
+          <label class="flash-opt"><input type="checkbox" id="fcShowEx" /> 예문 보기</label>
         </div>
       </div>
     </div>
@@ -130,7 +137,7 @@
 
       <input type="file" id="csvFile" accept=".csv,text/csv" style="display:none" />
       <button type="button" id="importBtn">CSV 파일에서 추가</button>
-      <div id="importHelp">CSV 형식: 일본어단어 , 히라가나 , 한국어뜻</div>
+      <div id="importHelp">CSV 형식: 일본어단어 , 히라가나 , 한국어뜻 [, 예문일본어 , 예문히라가나 , 예문한국어]</div>
 
       <button type="button" id="manageBtn">단어 관리</button>
       <div id="managePanel" style="display:none">

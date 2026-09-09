@@ -495,6 +495,18 @@ html, body {
 .flashcard.revealed .flip-hint { display: none; }
 .fc-detail .big-kanji { font-size: 25px; color: var(--accent); font-weight: 700; margin-bottom: 8px; }
 .fc-detail .big-mean { font-size: 20px; }
+/* 예문: 기본 숨김. .show-ex(체크박스) 가 붙고 내용이 있을 때만 표시 */
+.fc-ex { display: none; font-size: .95rem; line-height: 1.5; word-break: keep-all; }
+.flashcard.show-ex .fc-ex:not(:empty) { display: block; }
+.fc-ex-jp { margin-top: 12px; color: var(--text); }
+.fc-ex-hira { margin-top: 12px; color: var(--accent); }
+.fc-ex-kr { margin-top: 4px; color: var(--sub); }
+/* 섞기 버튼 아래 '예문 보기' 체크박스 */
+.flash-opt {
+  margin-top: 12px; display: inline-flex; align-items: center; gap: 6px;
+  font-size: .8rem; color: var(--sub); cursor: pointer; user-select: none;
+}
+.flash-opt input { accent-color: var(--accent); cursor: pointer; }
 .flash-nav { display: flex; margin-top: 20px; align-items: center; justify-content: center; }
 .progress { font-size: 1rem; color: var(--sub); text-align: center; font-weight: 700; }
 .flash-controls {

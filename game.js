@@ -141,11 +141,15 @@ function renderFlash() {
 function showCard() {
   const fc = document.getElementById("flashcard");
   const bm = document.getElementById("fcBookmark");
+  const exJp = document.getElementById("fcExJp");
+  const exHira = document.getElementById("fcExHira");
+  const exKr = document.getElementById("fcExKr");
   if (deck.length === 0) {
     fc.classList.remove("revealed");
     document.getElementById("fcKana").textContent = "단어 없음";
     document.getElementById("fcKanji").textContent = "";
     document.getElementById("fcMean").textContent = bookmarkOnly ? "북마크한 단어가 없습니다." : "";
+    exJp.textContent = ""; exHira.textContent = ""; exKr.textContent = "";
     document.getElementById("fcProgress").textContent = "0 / 0";
     bm.style.display = "none";
     return;
@@ -156,6 +160,11 @@ function showCard() {
   document.getElementById("fcKana").textContent = w.kanji || w.kana;  // 상단: 한자 우선
   document.getElementById("fcKanji").textContent = w.kana;            // 펼침: 히라가나 읽는 법
   document.getElementById("fcMean").textContent = w.mean;
+  // 예문: 첫 화면엔 일본어 문장, 펼치면 히라가나 문장·한국어 해석 (표시 여부는 .show-ex 로 제어)
+  const ex = w.ex || {};
+  exJp.textContent = ex.jp || "";
+  exHira.textContent = ex.hira || "";
+  exKr.textContent = ex.kr || "";
   document.getElementById("fcProgress").textContent = `${idx + 1} / ${deck.length}`;
   const marked = isBookmarked(w);
   bm.classList.toggle("on", marked);
@@ -176,6 +185,18 @@ function shuffleDeck() {
 }
 document.getElementById("flashcard").onclick = flip;
 document.getElementById("shuffleBtn").onclick = shuffleDeck;
+// 예문 보기 체크박스 → 카드에 .show-ex 토글 (localStorage 에 저장)
+const FC_EX_KEY = "vocabFlashShowEx";
+const fcShowEx = document.getElementById("fcShowEx");
+function applyShowEx() {
+  document.getElementById("flashcard").classList.toggle("show-ex", fcShowEx.checked);
+}
+fcShowEx.checked = localStorage.getItem(FC_EX_KEY) === "1";
+applyShowEx();
+fcShowEx.onchange = () => {
+  localStorage.setItem(FC_EX_KEY, fcShowEx.checked ? "1" : "0");
+  applyShowEx();
+};
 document.getElementById("prevBtn").onclick = prev;   // 이전 카드
 document.getElementById("nextBtn").onclick = next;   // 다음 카드
 // 플래시카드 북마크 버튼
@@ -331,6 +352,7 @@ wordForm.addEventListener("submit", (e) => {
     if (dup) { showAddMsg("이미 있는 단어입니다.", false); return; }
     const orig = WORDS.find(x => x.kana === editingKey.kana && (x.kanji || "") === (editingKey.kanji || ""));
     w.list = orig ? (orig.list || "") : "";   // 수정 시 소속 리스트 유지
+    if (orig && orig.ex) w.ex = orig.ex;      // 수정 시 예문도 유지
     const res = window.boss?.updateWord(editingKey, w);
     if (!res || !res.ok) {
       showAddMsg("수정 실패: " + ((res && res.error) || "알 수 없음"), false);
@@ -368,7 +390,7 @@ wordForm.addEventListener("submit", (e) => {
 
 cancelEditBtn.onclick = () => { resetForm(); showAddMsg("", true); };
 
-/* ===== CSV 파일에서 가져오기 (일본어단어, 히라가나, 한국어뜻) ===== */
+/* ===== CSV 파일에서 가져오기 (일본어단어, 히라가나, 한국어뜻[, 예문일본어, 예문히라가나, 예문한국어]) ===== */
 const csvFile = document.getElementById("csvFile");
 const importBtn = document.getElementById("importBtn");
 importBtn.onclick = () => csvFile.click();
@@ -412,7 +434,7 @@ function parseCsvText(text) {
   return rows;
 }
 function isHeaderRow(cells) {
-  const kw = ["일본어", "히라가나", "한국어", "뜻", "단어", "kana", "kanji", "mean"];
+  const kw = ["일본어", "히라가나", "한국어", "뜻", "단어", "예문", "문장", "kana", "kanji", "mean", "ex_"];
   return cells.some(c => kw.some(k => (c || "").toLowerCase().includes(k.toLowerCase())));
 }
 function importCsvText(text, title) {
@@ -423,13 +445,17 @@ function importCsvText(text, title) {
   let headerChecked = false;
   for (const cells of rows) {
     const c0 = (cells[0] || "").trim(), c1 = (cells[1] || "").trim(), c2 = (cells[2] || "").trim();
+    // 4~6열: 예문 (일본어 문장, 히라가나 문장, 한국어 해석) — 선택
+    const exJp = (cells[3] || "").trim(), exHira = (cells[4] || "").trim(), exKr = (cells[5] || "").trim();
     if (!c0 && !c1 && !c2) continue;                    // 빈 줄
     if (!headerChecked) { headerChecked = true; if (isHeaderRow(cells)) continue; } // 첫 줄이 헤더면 skip
     // 히라가나 칸이 실제 읽기면 kana=히라가나·한자=일본어, 없거나 '-' 면 kana=일본어·한자 없음
     let kana, kanji;
     if (c1 && c1 !== "-") { kana = c1; kanji = c0; } else { kana = c0; kanji = ""; }
     if (!kana) continue;
-    candidates.push({ row: rowFromKana(kana) || "", kana, kanji, mean: c2, list: listName });
+    const w = { row: rowFromKana(kana) || "", kana, kanji, mean: c2, list: listName };
+    if (exJp) w.ex = { jp: exJp, hira: exHira, kr: exKr };   // 예문이 있으면 함께 저장
+    candidates.push(w);
   }
   if (!candidates.length) { showAddMsg("가져올 단어가 없습니다.", false); return; }
   // 기존/자체 중복 제외
