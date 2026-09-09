@@ -77,6 +77,13 @@ html, body {
   padding: 20px 16px; text-align: center; gap: 10px;
 }
 .quiz-word { font-size: 40px; font-weight: 700; color: var(--text); line-height: 1.3; }
+/* 역방향 출제(한자 없는 단어): 한국어 뜻을 문제로 제시 → 글자 크기 축소 + 안내 라벨 */
+.quiz-card.reverse { position: relative; }
+.quiz-card.reverse .quiz-word { font-size: 26px; word-break: keep-all; }
+.quiz-card.reverse::before {
+  content: "뜻 → 히라가나"; position: absolute; top: 8px; left: 12px;
+  font-size: .68rem; font-weight: 600; color: var(--sub);
+}
 .quiz-mean { font-size: 1rem; color: var(--accent); font-weight: 600; visibility: hidden; min-height: 1.2em; }
 #quizForm { width: 100%; max-width: 360px; display: flex; gap: 8px; margin-top: 16px; }
 #quizInput {

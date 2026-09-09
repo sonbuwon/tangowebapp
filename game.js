@@ -270,6 +270,12 @@ document.addEventListener("keydown", e => {
   if (e.key === "ArrowRight") next();
   if (e.key === "ArrowLeft") prev();
   if (e.key === "ArrowUp") { e.preventDefault(); flip(); }
+  // ↓ → '예문 보기' 체크 설정/해제 (체크박스와 동일하게 저장·반영)
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    fcShowEx.checked = !fcShowEx.checked;
+    fcShowEx.dispatchEvent(new Event("change"));
+  }
   if (e.key === "b" || e.key === "B") document.getElementById("fcBookmark").click();
   if (e.ctrlKey && (e.key === "q" || e.key === "Q")) { e.preventDefault(); shuffleDeck(); }  // Ctrl+Q → 섞기
 });
@@ -796,11 +802,16 @@ function startQuiz(scope, label) {
   else { quizResult.textContent = ""; quizNext.style.display = "none"; quizBookmark.style.display = "none"; }
 }
 
+/* 한자가 없는(또는 かな와 같은) 단어는 문제=정답이 되므로 역방향(뜻 → 히라가나)으로 출제 */
+function isReverseQuiz(w) { return !w.kanji || w.kanji === w.kana; }
+
 function showQuizCard() {
   quizAnswered = false;
   const w = quizDeck[quizIdx];
-  quizWord.textContent = w.kanji || w.kana;                // 한자 우선, 없으면 かな
-  quizMean.textContent = "";                                // 제출 전에는 뜻 숨김
+  const reverse = isReverseQuiz(w);
+  document.querySelector(".quiz-card").classList.toggle("reverse", reverse);
+  quizWord.textContent = reverse ? w.mean : w.kanji;        // 역방향: 한국어 뜻 제시 / 정방향: 한자 제시
+  quizMean.textContent = "";                                // 제출 전에는 숨김
   quizMean.style.visibility = "hidden";
   quizResult.textContent = ""; quizResult.className = "";
   quizInput.value = "";
@@ -823,8 +834,8 @@ quizForm.addEventListener("submit", (e) => {
   quizAnswered = true;
   quizInput.disabled = true;
   quizSubmit.disabled = true;
-  // 맞든 틀리든 한국어 뜻 표시
-  quizMean.textContent = w.mean || "";
+  // 맞든 틀리든 보조 정보 표시: 정방향은 한국어 뜻, 역방향(뜻 제시)은 히라가나
+  quizMean.textContent = isReverseQuiz(w) ? w.kana : (w.mean || "");
   quizMean.style.visibility = "visible";
   if (correct) {
     quizScore++;

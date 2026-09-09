@@ -67,7 +67,8 @@ function loadWords() {
 
 /* ── words.csv 에 단어 한 줄 추가 ────────────────────────────────
    ex_jp/ex_hira/ex_kr 는 w.ex 가 있으면 기록, 없으면 빈 값.
-   같은 row 블록 끝에 삽입해 정렬 유지. */
+   항상 파일 끝에 추가해 세트(리스트) 원본 순서를 유지한다.
+   (행 필터는 row 열로 동작하므로 파일 내 행 블록 정렬은 필요 없음) */
 function csvEscape(v) {
   v = v == null ? '' : String(v);
   return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
@@ -88,13 +89,7 @@ function addWordToCsv(w) {
     const eol = text.includes('\r\n') ? '\r\n' : '\n';
     const lines = text.split(/\r?\n/);
     while (lines.length && lines[lines.length - 1] === '') lines.pop(); // 끝 빈 줄 제거
-    const line = wordLine(w);
-    // 같은 row 의 마지막 줄 뒤(없으면 맨 끝)에 삽입
-    let insertAt = lines.length;
-    for (let i = 1; i < lines.length; i++) {
-      if (lines[i].startsWith(w.row + ',')) insertAt = i + 1;
-    }
-    lines.splice(insertAt, 0, line);
+    lines.push(wordLine(w));             // 파일 끝에 추가 (입력 순서 유지)
     fs.writeFileSync(file, bom + lines.join(eol) + eol, 'utf8');
     return { ok: true };
   } catch (e) {
@@ -124,12 +119,7 @@ function addWordsToCsv(list) {
       const key = w.kana + '|' + (w.kanji || '');
       if (existing.has(key)) { skipped++; continue; }
       existing.add(key);
-      const line = wordLine(w);
-      let insertAt = lines.length;
-      for (let i = 1; i < lines.length; i++) {
-        if (lines[i].startsWith(w.row + ',')) insertAt = i + 1;
-      }
-      lines.splice(insertAt, 0, line);
+      lines.push(wordLine(w));           // 파일 끝에 순서대로 추가 → CSV 세트 원본 순서 유지
       added++;
     }
     fs.writeFileSync(file, bom + lines.join(eol) + eol, 'utf8');
@@ -194,7 +184,7 @@ function deleteListFromCsv(listName) {
   }
 }
 
-/* ── words.csv 의 단어 수정 (oldKey 줄 제거 후 새 값으로 재삽입) ──── */
+/* ── words.csv 의 단어 수정 (oldKey 줄을 같은 자리에서 새 값으로 교체 → 순서 유지) ── */
 function updateWordInCsv(oldKey, w) {
   try {
     if (!oldKey || !oldKey.kana) return { ok: false, error: '원본 키 없음' };
@@ -204,23 +194,21 @@ function updateWordInCsv(oldKey, w) {
     let bom = '';
     if (text.charCodeAt(0) === 0xFEFF) { bom = '﻿'; text = text.slice(1); }
     const eol = text.includes('\r\n') ? '\r\n' : '\n';
-    let lines = text.split(/\r?\n/);
+    const lines = text.split(/\r?\n/);
     while (lines.length && lines[lines.length - 1] === '') lines.pop();
-    let removed = 0;
-    lines = lines.filter((l, i) => {
-      if (i === 0) return true;
-      const p = l.split(',');
-      if (p[1] === oldKey.kana && (p[2] || '') === (oldKey.kanji || '')) { removed++; return false; }
-      return true;
-    });
-    if (!removed) return { ok: false, error: '수정할 단어를 찾지 못함' };
+    let replaced = 0;
     const line = wordLine(w);
-    let insertAt = lines.length;
     for (let i = 1; i < lines.length; i++) {
-      if (lines[i].startsWith(w.row + ',')) insertAt = i + 1;
+      const p = lines[i].split(',');
+      if (p[1] === oldKey.kana && (p[2] || '') === (oldKey.kanji || '')) {
+        if (replaced === 0) lines[i] = line;    // 첫 번째 일치 줄을 제자리에서 교체
+        else lines[i] = null;                   // 혹시 남은 중복 줄은 제거
+        replaced++;
+      }
     }
-    lines.splice(insertAt, 0, line);
-    fs.writeFileSync(file, bom + lines.join(eol) + eol, 'utf8');
+    if (!replaced) return { ok: false, error: '수정할 단어를 찾지 못함' };
+    const out = lines.filter(l => l !== null);
+    fs.writeFileSync(file, bom + out.join(eol) + eol, 'utf8');
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message };
