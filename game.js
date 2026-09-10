@@ -11,7 +11,7 @@ let hideMean = false;
 let hideKana = false;
 let curRow = "all";        // 행 필터: all / あ / か / ...
 let bookmarkOnly = false;  // 북마크만 보기
-let currentList = null;    // 선택된 리스트: null=전체, ""=개별 리스트, "제목"=CSV 리스트
+let currentList = null;    // 선택된 리스트: null=전체, "제목"=CSV 리스트
 
 /* ===== 리스트 메타(생성시각) — 홈 최신순 정렬용 (localStorage) ===== */
 const LISTS_KEY = "vocabLists";
@@ -134,11 +134,20 @@ function makeCard(w) {
     if (bookmarkOnly && !now) renderList();
   };
   // 가려진 상태에서 카드를 누르면 해당 뜻·히라가나를 드러냄
-  c.onclick = () => {
-    if (hideMean) c.querySelector(".mean").style.filter = "none";
-    if (hideKana) c.querySelector(".kana").style.filter = "none";
-  };
+  // 가려진 뜻·히라가나를 직접 누르면 그 항목만 드러냄 (카드 열기와 구분)
+  if (hideMean) c.querySelector(".mean").onclick = (e) => { e.stopPropagation(); e.currentTarget.style.filter = "none"; };
+  if (hideKana) c.querySelector(".kana").onclick = (e) => { e.stopPropagation(); e.currentTarget.style.filter = "none"; };
+  // 카드 클릭 → 이 단어부터 플래시카드로 열기
+  c.onclick = () => openFlashAt(w);
   return c;
+}
+
+// 목록에서 고른 단어를 현재 필터 순서 그대로의 플래시카드 덱에서 찾아 그 위치부터 표시
+function openFlashAt(w) {
+  setMode("flash");                                       // 덱 재구성 (필터 순서 = 목록 순서)
+  const key = wordKey(w);
+  const i = deck.findIndex(x => wordKey(x) === key);
+  if (i > 0) { idx = i; showCard(); }
 }
 
 /* ===== 플래시카드 모드 ===== */
@@ -276,6 +285,20 @@ document.addEventListener("keydown", e => {
     setView({ Digit1: "home", Digit2: "vocab", Digit3: "flash", Digit4: "input", Digit5: "quiz" }[e.code]);
     return;
   }
+  // 무한 테스트 진행 중: 1~4 보기 선택, Enter 다음 문제, B 북마크 토글
+  if (curView === "quiz" && quizInf.style.display !== "none") {
+    if (/^[1-4]$/.test(e.key)) {
+      const grid = infStep === 0 ? infKanaChoices : infStep === 1 ? infMeanChoices : null;
+      const b = grid && grid.children[Number(e.key) - 1];
+      if (b) { e.preventDefault(); b.click(); }
+      return;
+    }
+    if (e.key === "Enter" && infStep === 2 && document.activeElement !== quizInfNext) {
+      e.preventDefault(); nextInfQuestion(); return;   // 버튼에 포커스가 있으면 기본 클릭으로 처리됨
+    }
+    if ((e.key === "b" || e.key === "B") && infStep === 2) { quizInfBookmark.click(); return; }
+    return;
+  }
   // 아래 플래시카드 조작키는 단어장 화면·플래시카드 모드에서만
   if (curView !== "vocab" || curMode !== "flash") return;
   if (e.key === "ArrowRight") next();
@@ -294,20 +317,10 @@ document.addEventListener("keydown", e => {
 /* 상단 ✕ → 창 숨김 */
 document.getElementById("hideBtn").addEventListener("click", () => window.boss?.hide());
 
-/* ===== 단어 입력 화면 ===== */
-const wordForm = document.getElementById("wordForm");
-const inRow = document.getElementById("inRow");
-const inKana = document.getElementById("inKana");
-const inKanji = document.getElementById("inKanji");
-const inMean = document.getElementById("inMean");
+/* ===== 단어 입력 화면 (CSV 가져오기 전용) ===== */
 const addMsg = document.getElementById("addMsg");
-const addBtn = document.getElementById("addBtn");
-const cancelEditBtn = document.getElementById("cancelEditBtn");
-const editHint = document.getElementById("editHint");
 
-let editingKey = null;   // 수정 중인 원본 단어 { kana, kanji } / null 이면 추가 모드
-
-/* ── かな 첫 글자로 오십음 행 자동 분류 ─────────────────────────── */
+/* ── かな 첫 글자로 오십음 행 자동 분류 (CSV 가져오기 시 row 결정) ── */
 const ROW_MEMBERS = {
   "あ": "あいうえおぁぃぅぇぉゔ",
   "か": "かきくけこがぎぐげご",
@@ -328,84 +341,10 @@ function rowFromKana(kana) {
   for (const row in ROW_MEMBERS) if (ROW_MEMBERS[row].includes(c)) return row;
   return null;
 }
-// かな 입력 시 행 선택을 자동 갱신
-inKana.addEventListener("input", () => {
-  const r = rowFromKana(inKana.value.trim());
-  if (r) inRow.value = r;
-});
-
 function showAddMsg(text, ok) {
   addMsg.textContent = text;
   addMsg.className = ok ? "ok" : "err";
 }
-
-// 폼을 추가 모드로 되돌림 (입력값 비우고 라벨 복구)
-function resetForm() {
-  editingKey = null;
-  inKana.value = ""; inKanji.value = ""; inMean.value = "";
-  addBtn.textContent = "추가";
-  cancelEditBtn.style.display = "none";
-  editHint.style.display = "none";
-}
-
-wordForm.addEventListener("submit", (e) => {
-  e.preventDefault();
-  const kana = inKana.value.trim();
-  const w = {
-    row: rowFromKana(kana) || inRow.value,   // かな 첫 글자로 행 자동 분류
-    kana,
-    kanji: inKanji.value.trim(),
-    mean: inMean.value.trim(),
-    list: "",                                // 개별 추가 → 개별 리스트
-  };
-  if (!w.kana) { showAddMsg("かな를 입력하세요.", false); inKana.focus(); return; }
-  if (!w.mean) { showAddMsg("뜻(mean)을 입력하세요.", false); inMean.focus(); return; }
-
-  if (editingKey) {
-    // 수정 모드: 자기 자신을 제외한 중복 검사
-    const dup = WORDS.some(x =>
-      x.kana === w.kana && (x.kanji || "") === w.kanji &&
-      !(x.kana === editingKey.kana && (x.kanji || "") === (editingKey.kanji || "")));
-    if (dup) { showAddMsg("이미 있는 단어입니다.", false); return; }
-    const orig = WORDS.find(x => x.kana === editingKey.kana && (x.kanji || "") === (editingKey.kanji || ""));
-    w.list = orig ? (orig.list || "") : "";   // 수정 시 소속 리스트 유지
-    if (orig && orig.ex) w.ex = orig.ex;      // 수정 시 예문도 유지
-    const res = window.boss?.updateWord(editingKey, w);
-    if (!res || !res.ok) {
-      showAddMsg("수정 실패: " + ((res && res.error) || "알 수 없음"), false);
-      return;
-    }
-    const i = WORDS.findIndex(x => x.kana === editingKey.kana && (x.kanji || "") === (editingKey.kanji || ""));
-    if (i >= 0) WORDS[i] = w;           // 메모리 목록 갱신
-    // 북마크 키가 바뀌었으면 이전(migrate)
-    const oldBK = editingKey.kana + "|" + (editingKey.kanji || "");
-    if (bookmarks.has(oldBK)) {
-      bookmarks.delete(oldBK); bookmarks.add(wordKey(w));
-      saveBookmarks();
-    }
-    showAddMsg(`수정됨 ✓  ${w.kanji || w.kana} — ${w.mean}`, true);
-    resetForm();
-    renderManageList();
-    return;
-  }
-
-  // 추가 모드
-  if (WORDS.some(x => x.kana === w.kana && (x.kanji || "") === w.kanji)) {
-    showAddMsg("이미 있는 단어입니다.", false); return;
-  }
-  const res = window.boss?.addWord(w);
-  if (!res || !res.ok) {
-    showAddMsg("저장 실패: " + ((res && res.error) || "알 수 없음"), false);
-    return;
-  }
-  WORDS.push(w);                       // 메모리 목록에도 즉시 반영 (단어장 화면 진입 시 render)
-  showAddMsg(`추가됨 ✓  ${w.kanji || w.kana} — ${w.mean}`, true);
-  inKana.value = ""; inKanji.value = ""; inMean.value = "";  // 행은 유지
-  inKana.focus();
-  if (managePanel.style.display !== "none") renderManageList();  // 관리 목록 열려 있으면 갱신
-});
-
-cancelEditBtn.onclick = () => { resetForm(); showAddMsg("", true); };
 
 /* ===== CSV 파일에서 가져오기 (일본어단어, 히라가나, 한국어뜻[, 예문일본어, 예문히라가나, 예문한국어]) ===== */
 const csvFile = document.getElementById("csvFile");
@@ -492,98 +431,7 @@ function importCsvText(text, title) {
   fresh.forEach(w => WORDS.push(w));
   if (listName) recordList(listName);                  // 홈 최신순 정렬용 기록
   const dupCount = candidates.length - fresh.length;
-  showAddMsg(`"${listName || "개별 리스트"}"에 ${res.added}개 추가${dupCount ? `, ${dupCount}개 중복 제외` : ""} ✓`, true);
-  if (managePanel.style.display !== "none") renderManageList();
-}
-
-/* ===== 단어 관리 (목록 + 삭제) ===== */
-const manageBtn = document.getElementById("manageBtn");
-const managePanel = document.getElementById("managePanel");
-const manageList = document.getElementById("manageList");
-const manageCount = document.getElementById("manageCount");
-const clearAllBtn = document.getElementById("clearAllBtn");
-
-manageBtn.onclick = () => {
-  const open = managePanel.style.display === "none";
-  managePanel.style.display = open ? "block" : "none";
-  manageBtn.textContent = open ? "단어 관리 닫기" : "단어 관리";
-  if (open) renderManageList();
-};
-
-// 개별 전체 삭제 (개별 리스트 단어만, 되돌릴 수 없으므로 확인)
-clearAllBtn.onclick = () => {
-  const indivCount = WORDS.filter(w => !(w.list || "")).length;
-  if (indivCount === 0) { showAddMsg("삭제할 개별 단어가 없습니다.", false); return; }
-  if (!confirm(`개별 리스트 ${indivCount}개 단어를 모두 삭제할까요?\n(CSV 주제는 홈에서 삭제)\n되돌릴 수 없습니다.`)) return;
-  const res = window.boss?.deleteList("");           // 소속 없는 개별 단어만 삭제
-  if (!res || !res.ok) {
-    showAddMsg("개별 전체 삭제 실패: " + ((res && res.error) || "알 수 없음"), false);
-    return;
-  }
-  for (let i = WORDS.length - 1; i >= 0; i--) {
-    if (!(WORDS[i].list || "")) { bookmarks.delete(wordKey(WORDS[i])); WORDS.splice(i, 1); }
-  }
-  saveBookmarks();
-  if (currentList === "") currentList = null;
-  resetForm();                         // 수정 중이었으면 해제
-  showAddMsg("개별 전체 삭제됨 ✓", true);
-  renderManageList();
-};
-
-function renderManageList() {
-  const indiv = WORDS.filter(w => !(w.list || ""));   // 개별 리스트 단어만
-  manageCount.textContent = `${indiv.length}개`;
-  manageList.innerHTML = "";
-  if (indiv.length === 0) {
-    manageList.innerHTML = `<div class="empty-state">개별 단어가 없습니다.</div>`;
-    return;
-  }
-  indiv.forEach(w => {
-    const row = document.createElement("div");
-    row.className = "manage-row";
-    row.innerHTML = `
-      <span class="m-jp">${w.kanji || w.kana}</span>
-      <span class="m-kana">${w.kana}</span>
-      <span class="m-mean">${w.mean}</span>
-      <span class="m-actions">
-        <button class="m-edit" title="수정">✏️</button>
-        <button class="m-del" title="삭제">🗑</button>
-      </span>`;
-    row.querySelector(".m-edit").onclick = () => startEdit(w);
-    row.querySelector(".m-del").onclick = () => deleteWord(w);
-    manageList.appendChild(row);
-  });
-}
-
-// 관리 목록의 단어를 입력 폼에 불러와 수정 모드로 전환
-function startEdit(w) {
-  editingKey = { kana: w.kana, kanji: w.kanji || "" };
-  inRow.value = w.row;
-  inKana.value = w.kana;
-  inKanji.value = w.kanji || "";
-  inMean.value = w.mean || "";
-  addBtn.textContent = "수정 저장";
-  cancelEditBtn.style.display = "";
-  editHint.textContent = `수정 중: ${w.kanji || w.kana}`;
-  editHint.style.display = "";
-  document.getElementById("inputWrap").scrollTop = 0;   // 폼이 보이도록 상단으로
-  inKana.focus();
-}
-
-function deleteWord(w) {
-  const res = window.boss?.deleteWord({ kana: w.kana, kanji: w.kanji || "" });
-  if (!res || !res.ok) {
-    showAddMsg("삭제 실패: " + ((res && res.error) || "알 수 없음"), false);
-    return;
-  }
-  const i = WORDS.findIndex(x => x.kana === w.kana && (x.kanji || "") === (w.kanji || ""));
-  if (i >= 0) WORDS.splice(i, 1);
-  bookmarks.delete(wordKey(w));        // 북마크에 있었다면 함께 제거
-  saveBookmarks();
-  // 수정 중이던 단어를 삭제하면 폼을 추가 모드로 되돌림
-  if (editingKey && editingKey.kana === w.kana && (editingKey.kanji || "") === (w.kanji || "")) resetForm();
-  showAddMsg(`삭제됨 ✓  ${w.kanji || w.kana}`, true);
-  renderManageList();
+  showAddMsg(`"${listName}"에 ${res.added}개 추가${dupCount ? `, ${dupCount}개 중복 제외` : ""} ✓`, true);
 }
 
 /* ===== 홈 화면 (리스트 목록) ===== */
@@ -596,9 +444,6 @@ function renderHome() {
   homeList.innerHTML = "";
   // 전체 (최상단) — 모든 단어
   homeList.appendChild(makeDeckRow("전체", null, WORDS.length, false));
-  // 개별 리스트 — 주제 삭제 없음(개별 전체 삭제는 단어 관리에서)
-  const indivCount = WORDS.filter(w => !(w.list || "")).length;
-  homeList.appendChild(makeDeckRow("개별 리스트", "", indivCount, false));
   // CSV 리스트: 사용자가 지정한 순서(없으면 최신순)
   const names = orderedListNames();
   if (names.length < 2) reorderMode = false;          // 바꿀 게 없으면 순서 변경 모드 해제
@@ -723,8 +568,8 @@ function deleteList(name, label) {
 }
 
 /* ===== 시험 화면 =====
-   진입 시 범위(전체 / 개별 / CSV 주제 / 북마크)를 먼저 고르고 랜덤 출제.
-   문제: 한자(없으면 かな) → 히라가나 입력 → 채점.
+   진입 시 종류(입력 / 무한) → 범위(전체 / CSV 주제 / 북마크) → 구간·출제 순서를 고르고 시작.
+   입력 테스트: 한자(없으면 뜻) → 히라가나 입력 → 채점. 구간을 한 번씩 출제하고 끝남.
    정답이면 북마크 해제(북마크 단어인 경우), 맞든 틀리든 한국어 뜻 표시. */
 const quizPick = document.getElementById("quizPick");
 const quizPickList = document.getElementById("quizPickList");
@@ -757,19 +602,42 @@ function answerCandidates(kana) {
   return String(kana || "").split(/[\/／,、]/).map(normalizeKana).filter(Boolean);
 }
 
+// 범위(북마크 / 전체 / CSV 리스트)에 해당하는 단어 — 원본(파일) 순서 유지
+function scopeWords(scope) {
+  return scope.type === "bookmark"
+    ? WORDS.filter(isBookmarked)
+    : WORDS.filter(w => scope.list === null || (w.list || "") === scope.list);
+}
+
+/* ===== 시험 종류 선택 (입력 테스트 / 무한 테스트) — 마지막 선택을 기억 ===== */
+const QUIZ_KIND_KEY = "vocabQuizKind";
+let quizKind = localStorage.getItem(QUIZ_KIND_KEY) === "infinite" ? "infinite" : "input";
+const quizKindDesc = document.getElementById("quizKindDesc");
+const QUIZ_KIND_DESCS = {
+  input: "구간을 정한 뒤 한자를 보고 히라가나를 직접 입력합니다. 구간의 단어를 한 번씩 출제하고 끝납니다.",
+  infinite: "구간을 정한 뒤 히라가나 → 한국어 뜻 순으로 4지선다 문제를 끝없이 출제합니다.",
+};
+function applyQuizKind() {
+  document.querySelectorAll(".quiz-kind-btn").forEach(b => b.classList.toggle("active", b.dataset.kind === quizKind));
+  quizKindDesc.textContent = QUIZ_KIND_DESCS[quizKind];
+}
+document.querySelectorAll(".quiz-kind-btn").forEach(b => {
+  b.onclick = () => { quizKind = b.dataset.kind; localStorage.setItem(QUIZ_KIND_KEY, quizKind); applyQuizKind(); };
+});
+applyQuizKind();
+
 /* 시험 범위 선택 화면 (홈 리스트 + 북마크) */
 function showQuizPicker() {
   quizPick.style.display = "flex";
   quizWrap.style.display = "none";
+  quizRange.style.display = "none";
+  quizInf.style.display = "none";
   quizPickList.innerHTML = "";
   // 북마크 (최상단)
   const bmCount = WORDS.filter(isBookmarked).length;
   quizPickList.appendChild(makeQuizPickRow("★ 북마크", { type: "bookmark" }, bmCount));
   // 전체
   quizPickList.appendChild(makeQuizPickRow("전체", { type: "list", list: null }, WORDS.length));
-  // 개별 리스트
-  const indivCount = WORDS.filter(w => !(w.list || "")).length;
-  quizPickList.appendChild(makeQuizPickRow("개별 리스트", { type: "list", list: "" }, indivCount));
   // CSV 리스트 (홈과 동일 정렬 — 홈에서 지정한 순서를 따름)
   orderedListNames().forEach(name => {
     const count = WORDS.filter(w => (w.list || "") === name).length;
@@ -782,35 +650,33 @@ function makeQuizPickRow(label, scope, count) {
   d.innerHTML = `
     <span class="deck-name">${label}</span>
     <span class="deck-right"><span class="deck-count">${count}개</span></span>`;
-  d.onclick = () => startQuiz(scope, label);
+  // 입력/무한 모두 구간 지정 화면을 거친 뒤 시작
+  d.onclick = () => showRangeScreen(scope, label);
   return d;
 }
-quizBackBtn.onclick = showQuizPicker;
+quizBackBtn.onclick = () => {                              // 구간 변경 → 같은 범위의 구간 지정 화면으로
+  quizWrap.style.display = "none";
+  quizRange.style.display = "flex";
+  updateRange();
+};
+document.getElementById("quizEndBtn").onclick = showQuizPicker;   // 시험 종료 → 시험 홈
 
-// 선택한 범위로 시험 시작
-function startQuiz(scope, label) {
-  quizPick.style.display = "none";
+// 구간 지정 화면에서 '시작' → 입력 테스트 시작 (순서대로 / 랜덤)
+function startInputQuiz() {
+  const [lo, hi] = rangeLoHi();
+  let deck = rangeWords.slice(lo, hi + 1);
+  if (!deck.length) return;
+  if (quizOrder === "random") deck = shuffled(deck);
+  quizDeck = deck;
+  quizRange.style.display = "none";
   quizWrap.style.display = "flex";
-  quizScope.textContent = label;
-  quizDeck = scope.type === "bookmark"
-    ? WORDS.filter(isBookmarked)
-    : WORDS.filter(w => scope.list === null || (w.list || "") === scope.list);
-  quizDeck = quizDeck.slice();
-  for (let i = quizDeck.length - 1; i > 0; i--) {          // 랜덤 셔플
-    const j = Math.floor(Math.random() * (i + 1));
-    [quizDeck[i], quizDeck[j]] = [quizDeck[j], quizDeck[i]];
-  }
+  quizScope.textContent = `${rangeLabel}  ·  ${lo + 1}~${hi + 1}번 (${deck.length}개)  ·  ${quizOrder === "random" ? "랜덤" : "순서대로"}`;
   quizIdx = 0; quizScore = 0;
-  const has = quizDeck.length > 0;
-  quizEmpty.textContent = scope.type === "bookmark"
-    ? "북마크한 단어가 없습니다. 단어장에서 ★ 북마크를 먼저 등록하세요."
-    : "이 리스트에 단어가 없습니다.";
-  quizEmpty.style.display = has ? "none" : "block";
-  quizProgress.style.display = has ? "" : "none";
-  document.querySelector(".quiz-card").style.display = has ? "" : "none";
-  quizForm.style.display = has ? "" : "none";
-  if (has) showQuizCard();
-  else { quizResult.textContent = ""; quizNext.style.display = "none"; quizBookmark.style.display = "none"; }
+  quizEmpty.style.display = "none";
+  quizProgress.style.display = "";
+  document.querySelector(".quiz-card").style.display = "";
+  quizForm.style.display = "";
+  showQuizCard();
 }
 
 /* 한자가 없는(또는 かな와 같은) 단어는 문제=정답이 되므로 역방향(뜻 → 히라가나)으로 출제 */
@@ -914,6 +780,358 @@ quizBookmark.onclick = () => {
   quizNext.focus();                                   // Enter로 바로 다음 문제 진행 가능
 };
 
+/* ===== 무한 테스트 =====
+   범위 선택 → 원본 순서 목록에서 손잡이 2개 슬라이더로 출제 구간 지정 → 시작.
+   문제: 일본어 단어 → (1) 히라가나 4지선다 → (2) 한국어 뜻 4지선다. 둘 다 맞아야 정답.
+   히라가나 보기는 정답과 비슷하게 생긴 변형(탁점·모음·장음·촉음 등)과 비슷한 실제 읽기로 구성.
+   오답 → 북마크 자동 추가. 정답 → 자동 변경 없음(버튼으로 수동 추가/해제). 구간이 다 돌면 다시 섞어 계속. */
+const quizRange = document.getElementById("quizRange");
+const quizRangeScope = document.getElementById("quizRangeScope");
+const quizRangeBackBtn = document.getElementById("quizRangeBackBtn");
+const rangeInfo = document.getElementById("rangeInfo");
+const rangeSlider = document.getElementById("rangeSlider");
+const rangeFill = document.getElementById("rangeFill");
+const rangeThumbA = document.getElementById("rangeThumbA");
+const rangeThumbB = document.getElementById("rangeThumbB");
+const rangeList = document.getElementById("rangeList");
+const quizRangeStart = document.getElementById("quizRangeStart");
+const quizInf = document.getElementById("quizInf");
+const quizInfScope = document.getElementById("quizInfScope");
+const quizInfBackBtn = document.getElementById("quizInfBackBtn");
+const quizInfProgress = document.getElementById("quizInfProgress");
+const quizInfCard = document.getElementById("quizInfCard");
+const quizInfWord = document.getElementById("quizInfWord");
+const quizInfSub = document.getElementById("quizInfSub");
+const infStepKana = document.getElementById("infStepKana");
+const infStepMean = document.getElementById("infStepMean");
+const infKanaChoices = document.getElementById("infKanaChoices");
+const infMeanChoices = document.getElementById("infMeanChoices");
+const quizInfResult = document.getElementById("quizInfResult");
+const quizInfNext = document.getElementById("quizInfNext");
+const quizInfBookmark = document.getElementById("quizInfBookmark");
+
+let rangeScopeSel = null, rangeLabel = "";
+let rangeWords = [];                 // 범위 전체 단어 (원본 순서)
+let rangeV1 = 0, rangeV2 = 0;      // 손잡이 A/B 위치 (인덱스). 교차 가능 → 작은 쪽이 시작
+let infDeck = [];                  // 구간 단어
+let infQueue = [];                 // 출제 대기열 (비면 다시 섞음)
+let infCur = null;                 // 현재 문제 단어
+let infCount = 0, infOk = 0, infBad = 0;
+let infStep = 0;                   // 0=히라가나 선택 중, 1=뜻 선택 중, 2=채점 완료
+let infKanaOK = false;
+
+function shuffled(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/* ── 출제 순서 (순서대로 / 랜덤) — 마지막 선택을 기억, 입력·무한 테스트 공통 ── */
+const QUIZ_ORDER_KEY = "vocabQuizOrder";
+let quizOrder = localStorage.getItem(QUIZ_ORDER_KEY) === "seq" ? "seq" : "random";
+function applyQuizOrder() {
+  document.querySelectorAll(".quiz-order-btn").forEach(b => b.classList.toggle("active", b.dataset.order === quizOrder));
+}
+document.querySelectorAll(".quiz-order-btn").forEach(b => {
+  b.onclick = () => { quizOrder = b.dataset.order; localStorage.setItem(QUIZ_ORDER_KEY, quizOrder); applyQuizOrder(); };
+});
+applyQuizOrder();
+
+/* ── 구간 지정 화면 (입력/무한 공용) ── */
+function showRangeScreen(scope, label) {
+  rangeScopeSel = scope; rangeLabel = label;
+  rangeWords = scopeWords(scope);
+  quizPick.style.display = "none";
+  quizWrap.style.display = "none";
+  quizInf.style.display = "none";
+  quizRange.style.display = "flex";
+  quizRangeScope.textContent = `${label}  ·  ${quizKind === "infinite" ? "무한 테스트" : "입력 테스트"}`;
+  rangeV1 = 0; rangeV2 = Math.max(0, rangeWords.length - 1);
+  renderRangeList();
+  updateRange();
+}
+function rangeLoHi() { return [Math.min(rangeV1, rangeV2), Math.max(rangeV1, rangeV2)]; }
+function renderRangeList() {
+  rangeList.innerHTML = "";
+  if (!rangeWords.length) {
+    rangeList.innerHTML = `<div class="empty-state">${rangeScopeSel.type === "bookmark" ? "북마크한 단어가 없습니다." : "이 리스트에 단어가 없습니다."}</div>`;
+    return;
+  }
+  rangeWords.forEach((w, i) => {
+    const row = document.createElement("div");
+    row.className = "range-row";
+    row.innerHTML = `<span class="r-idx">${i + 1}</span><span class="r-jp"></span><span class="r-kana"></span><span class="r-mean"></span>`;
+    row.querySelector(".r-jp").textContent = (w.kanji && w.kanji !== w.kana) ? w.kanji : "";
+    row.querySelector(".r-kana").textContent = w.kana;
+    row.querySelector(".r-mean").textContent = w.mean || "";
+    row.onclick = () => moveNearestThumb(i);          // 행 클릭 → 가까운 손잡이를 이 단어로
+    rangeList.appendChild(row);
+  });
+}
+function moveNearestThumb(i) {
+  if (Math.abs(rangeV1 - i) <= Math.abs(rangeV2 - i)) rangeV1 = i; else rangeV2 = i;
+  updateRange(i);
+}
+function updateRange(scrollTo) {
+  const n = rangeWords.length;
+  const [lo, hi] = rangeLoHi();
+  const pct = i => (n <= 1 ? 0 : (i / (n - 1)) * 100);
+  rangeThumbA.style.left = pct(rangeV1) + "%";
+  rangeThumbB.style.left = pct(rangeV2) + "%";
+  rangeFill.style.left = pct(lo) + "%";
+  rangeFill.style.width = (pct(hi) - pct(lo)) + "%";
+  if (!n) {
+    rangeInfo.textContent = "출제할 단어가 없습니다.";
+    quizRangeStart.disabled = true;
+    return;
+  }
+  rangeInfo.textContent = `${lo + 1}번 ~ ${hi + 1}번  ·  ${hi - lo + 1}개 출제`;
+  quizRangeStart.disabled = false;
+  const rows = rangeList.querySelectorAll(".range-row");
+  rows.forEach((row, i) => {
+    row.classList.toggle("in", i >= lo && i <= hi);
+    row.classList.toggle("edge", i === lo || i === hi);
+  });
+  if (scrollTo !== undefined && rows[scrollTo]) rows[scrollTo].scrollIntoView({ block: "nearest" });
+}
+function rangeIndexFromX(clientX) {
+  const n = rangeWords.length;
+  if (n <= 1) return 0;
+  const r = rangeSlider.getBoundingClientRect();
+  const p = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+  return Math.round(p * (n - 1));
+}
+// 손잡이 드래그 (pointer capture 로 슬라이더 밖으로 나가도 계속 추적) + 키보드 ←/→
+function bindRangeThumb(el, which) {
+  let dragging = false;
+  const setVal = i => { if (which === 1) rangeV1 = i; else rangeV2 = i; updateRange(i); };
+  el.addEventListener("pointerdown", e => {
+    e.preventDefault(); e.stopPropagation();
+    dragging = true; el.setPointerCapture(e.pointerId); el.classList.add("active"); el.focus();
+  });
+  el.addEventListener("pointermove", e => { if (dragging) setVal(rangeIndexFromX(e.clientX)); });
+  const end = () => { dragging = false; el.classList.remove("active"); };
+  el.addEventListener("pointerup", end);
+  el.addEventListener("pointercancel", end);
+  el.addEventListener("keydown", e => {
+    const cur = which === 1 ? rangeV1 : rangeV2, n = rangeWords.length;
+    if (e.key === "ArrowLeft") { e.preventDefault(); setVal(Math.max(0, cur - 1)); }
+    if (e.key === "ArrowRight") { e.preventDefault(); setVal(Math.min(n - 1, cur + 1)); }
+  });
+}
+bindRangeThumb(rangeThumbA, 1);
+bindRangeThumb(rangeThumbB, 2);
+// 선(트랙) 클릭 → 가까운 손잡이 이동
+rangeSlider.addEventListener("pointerdown", e => moveNearestThumb(rangeIndexFromX(e.clientX)));
+quizRangeBackBtn.onclick = showQuizPicker;
+quizRangeStart.onclick = () => (quizKind === "infinite" ? startInfQuiz() : startInputQuiz());
+
+/* ── 비슷한 히라가나 보기 생성 ── */
+const KANA_ROWS = ["あいうえお", "かきくけこ", "がぎぐげご", "さしすせそ", "ざじずぜぞ", "たちつてと", "だぢづでど",
+  "なにぬねの", "はひふへほ", "ばびぶべぼ", "ぱぴぷぺぽ", "まみむめも", "やゆよ", "らりるれろ", "わを"];
+const DAKUTEN_PAIRS = [
+  ["かきくけこさしすせそたちつてとはひふへほ", "がぎぐげござじずぜぞだぢづでどばびぶべぼ"],
+  ["はひふへほ", "ぱぴぷぺぽ"], ["ばびぶべぼ", "ぱぴぷぺぽ"],
+];
+const SMALL_PAIRS = ["やゃ", "ゆゅ", "よょ", "つっ", "あぁ", "いぃ", "うぅ", "えぇ", "おぉ"];
+const SMALL_KANA = "ゃゅょぁぃぅぇぉっ";
+// 정답에서 한 군데만 바꾼 변형들.
+//   tier 1a = 가장 비슷(탁점·작은 글자 토글·장음), tier 1b = 인접 교환·촉음 삽입,
+//   tier 2 = 같은 행 모음 변경, tier 3 = 글자 삭제
+//   작은 글자(ゃゅょっ 등) 주변에서는 교환·촉음 삽입을 하지 않아 「っょ」같은 비정상 표기를 막음
+function kanaVariants(s) {
+  const t1a = new Set(), t1b = new Set(), t2 = new Set(), t3 = new Set();
+  const chars = [...s];
+  const put = (set, arr) => { const t = arr.join(""); if (t && t !== s) set.add(t); };
+  const isSmall = c => SMALL_KANA.includes(c);
+  for (let i = 0; i < chars.length; i++) {
+    const c = chars[i];
+    for (const [a, b] of DAKUTEN_PAIRS) {
+      let j = a.indexOf(c); if (j >= 0) { const cp = [...chars]; cp[i] = b[j]; put(t1a, cp); }
+      j = b.indexOf(c); if (j >= 0) { const cp = [...chars]; cp[i] = a[j]; put(t1a, cp); }
+    }
+    for (const p of SMALL_PAIRS) { const j = p.indexOf(c); if (j >= 0) { const cp = [...chars]; cp[i] = p[1 - j]; put(t1a, cp); } }
+    if (i < chars.length - 1 && c !== chars[i + 1] && !isSmall(c) && !isSmall(chars[i + 1])) {
+      const cp = [...chars]; [cp[i], cp[i + 1]] = [cp[i + 1], cp[i]]; put(t1b, cp);
+    }
+    if (i > 0 && !isSmall(c) && c !== "ん" && chars[i - 1] !== "っ" && chars[i - 1] !== "ん") {
+      const cp = [...chars]; cp.splice(i, 0, "っ"); put(t1b, cp);
+    }
+    if (!isSmall(c)) for (const row of KANA_ROWS) if (row.includes(c)) for (const r of row) if (r !== c) { const cp = [...chars]; cp[i] = r; put(t2, cp); }
+    if (chars.length > 1 && !(i < chars.length - 1 && isSmall(chars[i + 1]))) { const cp = [...chars]; cp.splice(i, 1); put(t3, cp); }
+  }
+  const last = chars[chars.length - 1];
+  if ("おこそとのほもよろごぞどぼぽょ".includes(last)) put(t1a, [...chars, "う"]);   // 장음 추가 (お단)
+  if ("えけせてねへめれげぜでべぺ".includes(last)) put(t1a, [...chars, "い"]);         // 장음 추가 (え단)
+  return [t1a, t1b, t2, t3].map(set => [...set]);
+}
+function editDistance(a, b) {
+  const m = a.length, n = b.length;
+  if (Math.abs(m - n) > 2) return 99;
+  const d = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+  for (let j = 1; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[m][n];
+}
+// 정답 kana 와 비슷한 오답 보기 count 개.
+// 변형(tier1a) → 비슷한 실제 읽기 → 변형(tier1b) → 변형(tier2/3) → 무작위 실제 읽기 순으로 채움
+function similarKana(kana, count) {
+  const used = new Set([kana]);
+  const out = [];
+  const take = (list) => { for (const k of shuffled(list)) { if (out.length >= count) return; if (!used.has(k)) { used.add(k); out.push(k); } } };
+  const [t1a, t1b, t2, t3] = kanaVariants(kana);
+  const real = WORDS.map(w => w.kana).filter(k => k && k !== kana);
+  const realSimilar = real.filter(k => editDistance(k, kana) <= 2);
+  take(t1a); take(realSimilar); take(t1b); take(t2); take(t3); take(real);
+  return out;
+}
+function buildKanaOptions(w) { return shuffled([w.kana, ...similarKana(w.kana, 3)]); }
+// 한국어 뜻 보기: 구간 → 범위 → 전체 순으로 다른 뜻을 가져옴
+function buildMeanOptions(w) {
+  const used = new Set([w.mean]);
+  const out = [];
+  const take = (list) => { for (const m of shuffled(list)) { if (out.length >= 3) return; if (m && !used.has(m)) { used.add(m); out.push(m); } } };
+  take(infDeck.map(x => x.mean)); take(rangeWords.map(x => x.mean)); take(WORDS.map(x => x.mean));
+  return shuffled([w.mean, ...out]);
+}
+
+/* ── 무한 테스트 진행 ── */
+function startInfQuiz() {
+  const [lo, hi] = rangeLoHi();
+  infDeck = rangeWords.slice(lo, hi + 1);
+  if (!infDeck.length) return;
+  infQueue = []; infCur = null; infCount = 0; infOk = 0; infBad = 0;
+  quizRange.style.display = "none";
+  quizInf.style.display = "flex";
+  quizInfScope.textContent = `${rangeLabel}  ·  ${lo + 1}~${hi + 1}번 (${infDeck.length}개)  ·  ${quizOrder === "random" ? "랜덤" : "순서대로"}`;
+  nextInfQuestion();
+}
+function nextInfQuestion() {
+  if (!infQueue.length) {                                  // 구간을 다 돌면 처음부터 다시 (무한)
+    if (quizOrder === "seq") {
+      infQueue = infDeck.slice().reverse();                // pop() 으로 꺼내므로 뒤집어 넣음 → 원본 순서
+    } else {
+      infQueue = shuffled(infDeck);
+      if (infDeck.length > 1 && infQueue[infQueue.length - 1] === infCur) {   // 직전 단어 연속 출제 방지
+        [infQueue[0], infQueue[infQueue.length - 1]] = [infQueue[infQueue.length - 1], infQueue[0]];
+      }
+    }
+  }
+  infCur = infQueue.pop();
+  infCount++;
+  const w = infCur;
+  const kanaOnly = isReverseQuiz(w);                       // 한자 없는 단어: 히라가나 단계 생략, 뜻만 선택
+  quizInfCard.classList.toggle("kana-only", kanaOnly);
+  quizInfWord.textContent = w.kanji || w.kana;
+  quizInfSub.textContent = "";
+  quizInfSub.style.visibility = "hidden";
+  quizInfResult.textContent = ""; quizInfResult.className = "";
+  quizInfNext.style.display = "none";
+  quizInfBookmark.style.display = "none";
+  infKanaChoices.innerHTML = ""; infMeanChoices.innerHTML = "";
+  if (kanaOnly) {
+    infStep = 1; infKanaOK = true;
+    infStepKana.style.display = "none";
+    infStepMean.style.display = "";
+    renderChoices(infMeanChoices, buildMeanOptions(w), pickInfMean);
+  } else {
+    infStep = 0; infKanaOK = false;
+    infStepKana.style.display = "";
+    infStepMean.style.display = "none";
+    renderChoices(infKanaChoices, buildKanaOptions(w), pickInfKana);
+  }
+  updateInfProgress();
+}
+function updateInfProgress() {
+  quizInfProgress.textContent = `${infCount}번째  ·  정답 ${infOk}  ·  오답 ${infBad}`;
+}
+function renderChoices(container, options, onPick) {
+  container.innerHTML = "";
+  options.forEach((opt, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "choice-btn";
+    b.innerHTML = `<span class="choice-num">${i + 1}</span><span class="choice-text"></span>`;
+    b.querySelector(".choice-text").textContent = opt;
+    b.onclick = () => onPick(opt, b);
+    container.appendChild(b);
+  });
+}
+// 보기 채점 표시: 정답 보기는 초록, 잘못 고른 보기는 빨강, 전부 비활성
+function markChoices(container, correct, picked) {
+  container.querySelectorAll(".choice-btn").forEach(b => {
+    b.disabled = true;
+    const t = b.querySelector(".choice-text").textContent;
+    if (t === correct) b.classList.add("ok");
+    else if (b === picked) b.classList.add("bad");
+  });
+}
+function pickInfKana(opt, btn) {
+  if (infStep !== 0) return;
+  infKanaOK = opt === infCur.kana;
+  markChoices(infKanaChoices, infCur.kana, btn);
+  infStep = 1;
+  infStepMean.style.display = "";
+  renderChoices(infMeanChoices, buildMeanOptions(infCur), pickInfMean);
+}
+function pickInfMean(opt, btn) {
+  if (infStep !== 1) return;
+  const meanOK = opt === infCur.mean;
+  markChoices(infMeanChoices, infCur.mean, btn);
+  infStep = 2;
+  finishInf(infKanaOK && meanOK, meanOK);
+}
+function finishInf(correct, meanOK) {
+  const w = infCur;
+  quizInfSub.textContent = `${w.kana}  ·  ${w.mean}`;
+  quizInfSub.style.visibility = "visible";
+  quizInfResult.textContent = "";
+  if (correct) {
+    infOk++;
+    quizInfResult.textContent = "정답입니다 ✓";
+    quizInfResult.className = "ok";
+  } else {
+    infBad++;
+    const already = isBookmarked(w);                      // 오답 → 북마크 자동 추가
+    if (!already) { bookmarks.add(wordKey(w)); saveBookmarks(); }
+    quizInfResult.textContent = `오답입니다 ✕${already ? "" : "  북마크 추가됨."}`;
+    if (!isReverseQuiz(w)) {
+      const detail = document.createElement("div");
+      detail.className = "quiz-detail";
+      detail.textContent = `히라가나 ${infKanaOK ? "○" : "✕"}  ·  뜻 ${meanOK ? "○" : "✕"}`;
+      quizInfResult.appendChild(detail);
+    }
+    quizInfResult.className = "err";
+  }
+  updateInfProgress();
+  updateInfBookmarkBtn();
+  quizInfNext.style.display = "";
+  setTimeout(() => quizInfNext.focus(), 0);
+}
+// 무한 테스트의 북마크 버튼은 토글: 추가 ↔ 해제
+function updateInfBookmarkBtn() {
+  const on = isBookmarked(infCur);
+  quizInfBookmark.textContent = on ? "★ 북마크 해제" : "☆ 북마크 추가";
+  quizInfBookmark.classList.toggle("on", on);
+  quizInfBookmark.style.display = "";
+}
+quizInfBookmark.onclick = () => {
+  if (infStep !== 2 || !infCur) return;
+  toggleBookmark(infCur);
+  updateInfBookmarkBtn();
+  quizInfNext.focus();
+};
+quizInfNext.onclick = nextInfQuestion;
+quizInfBackBtn.onclick = () => {                           // 구간 변경 → 같은 범위의 구간 지정 화면으로
+  quizInf.style.display = "none";
+  quizRange.style.display = "flex";
+  updateRange();
+};
+document.getElementById("quizInfEndBtn").onclick = showQuizPicker;   // 시험 종료 → 시험 홈(종류·범위 선택)
+
 /* ===== 화면 전환 (1 홈 / 2 단어장 / 3 플래시카드 / 4 단어 입력 / 5 시험) =====
    vocab·flash 는 같은 단어장 화면을 쓰되 flash 는 플래시카드 모드로 진입 */
 const SCREENS = { home: "homeScreen", vocab: "vocabScreen", flash: "vocabScreen", input: "inputScreen", quiz: "quizScreen" };
@@ -932,7 +1150,6 @@ function setView(view) {
   let t = TITLES[view] || "";
   if (view === "vocab" || view === "flash") {
     if (currentList === null) t = "전체";
-    else if (currentList === "") t = "개별 리스트";
     else t = currentList;
   }
   document.getElementById("title").textContent = t;
@@ -940,7 +1157,6 @@ function setView(view) {
   if (view === "home") renderHome();
   else if (view === "flash") setMode("flash");             // 플래시카드 모드로 전환
   else if (view === "vocab") setMode("list");              // 목록 모드로 전환
-  else if (view === "input") setTimeout(() => inKana.focus(), 0);
   else if (view === "quiz") showQuizPicker();              // 시험 범위 선택부터
 }
 window.boss?.onView(setView);
