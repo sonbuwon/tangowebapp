@@ -282,7 +282,7 @@ document.addEventListener("keydown", e => {
   // Alt+1~5 → 화면 전환 (전역 단축키가 막혀도 창이 떠 있으면 동작)
   if (e.altKey && ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5"].includes(e.code)) {
     e.preventDefault();
-    setView({ Digit1: "home", Digit2: "vocab", Digit3: "flash", Digit4: "input", Digit5: "quiz" }[e.code]);
+    setView({ Digit1: "home", Digit2: "vocab", Digit3: "flash", Digit4: "quiz", Digit5: "input" }[e.code]);
     return;
   }
   // 무한 테스트 진행 중: 1~4 보기 선택, Enter 다음 문제, B 북마크 토글
@@ -1132,7 +1132,7 @@ quizInfBackBtn.onclick = () => {                           // 구간 변경 → 
 };
 document.getElementById("quizInfEndBtn").onclick = showQuizPicker;   // 시험 종료 → 시험 홈(종류·범위 선택)
 
-/* ===== 화면 전환 (1 홈 / 2 단어장 / 3 플래시카드 / 4 단어 입력 / 5 시험) =====
+/* ===== 화면 전환 (1 홈 / 2 단어장 / 3 플래시카드 / 4 시험 / 5 단어 입력) =====
    vocab·flash 는 같은 단어장 화면을 쓰되 flash 는 플래시카드 모드로 진입 */
 const SCREENS = { home: "homeScreen", vocab: "vocabScreen", flash: "vocabScreen", input: "inputScreen", quiz: "quizScreen" };
 const TITLES  = { home: "홈", vocab: "単語", flash: "単語", input: "単語追加", quiz: "試験" };

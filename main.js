@@ -12,8 +12,8 @@ const KEY_PANIC  = 'Control+Alt+H';   // 패닉키: 무조건 즉시 숨기기
 const KEY_HOME   = 'Alt+1';           // 홈(리스트) 화면으로 전환
 const KEY_VOCAB  = 'Alt+2';           // 단어장(목록) 화면으로 전환
 const KEY_FLASH  = 'Alt+3';           // 플래시카드 모드로 전환
-const KEY_INPUT  = 'Alt+4';           // 단어 입력 화면으로 전환
-const KEY_QUIZ   = 'Alt+5';           // 시험 화면으로 전환
+const KEY_QUIZ   = 'Alt+4';           // 시험 화면으로 전환
+const KEY_INPUT  = 'Alt+5';           // 단어 입력 화면으로 전환
 // ───────────────────────────────────────────────────────────────
 
 let win = null;
@@ -114,8 +114,8 @@ function buildTray() {
     { label: `홈  (${KEY_HOME})`, click: () => switchView('home') },
     { label: `단어장  (${KEY_VOCAB})`, click: () => switchView('vocab') },
     { label: `플래시카드  (${KEY_FLASH})`, click: () => switchView('flash') },
-    { label: `단어 입력  (${KEY_INPUT})`, click: () => switchView('input') },
     { label: `시험  (${KEY_QUIZ})`, click: () => switchView('quiz') },
+    { label: `단어 입력  (${KEY_INPUT})`, click: () => switchView('input') },
     { type: 'separator' },
     { label: '종료', click: () => { app.isQuiting = true; app.quit(); } },
   ]);
