@@ -398,6 +398,15 @@ html, body {
   max-width: 360px; margin: 6px auto 0;
   font-size: .72rem; color: var(--sub); text-align: center;
 }
+/* 북마크 전체 해제 */
+#clearBmBtn {
+  display: block; max-width: 360px; margin: 16px auto 0; width: 100%;
+  padding: 9px; border: 1px solid #6b2a2a; border-radius: 9px;
+  background: #3a1f1f; color: #e06b6b;
+  font-size: .86rem; font-weight: 700; cursor: pointer; transition: .15s;
+}
+#clearBmBtn:hover { background: #4a2323; color: #ff8a8a; }
+#clearBmBtn:disabled { opacity: .45; cursor: default; }
 
 /* ===== 리더 화면 ===== */
 #readerBar {

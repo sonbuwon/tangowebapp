@@ -60,6 +60,12 @@ function isBookmarked(w) { return bookmarks.has(wordKey(w)); }
 function updateBmCount() {
   const btn = document.getElementById("bmFilter");
   if (btn) btn.textContent = `★ ${bookmarks.size}`;
+  // 단어 입력 화면의 '북마크 전체 해제' 버튼에도 개수 반영
+  const clr = document.getElementById("clearBmBtn");
+  if (clr) {
+    clr.textContent = `★ 북마크 전체 해제 (${bookmarks.size}개)`;
+    clr.disabled = bookmarks.size === 0;
+  }
 }
 /* 북마크 저장 + 버튼 개수 갱신 (북마크 변경 시 항상 이 함수 사용) */
 function saveBookmarks() {
@@ -345,6 +351,18 @@ function showAddMsg(text, ok) {
   addMsg.textContent = text;
   addMsg.className = ok ? "ok" : "err";
 }
+
+/* 북마크 전체 해제 — 단어는 그대로 두고 북마크 표시만 모두 지움 (되돌릴 수 없으므로 확인) */
+document.getElementById("clearBmBtn").onclick = () => {
+  const n = bookmarks.size;
+  if (!n) { showAddMsg("해제할 북마크가 없습니다.", false); return; }
+  if (!confirm(`북마크 ${n}개를 모두 해제할까요?\n(단어는 삭제되지 않습니다)`)) return;
+  bookmarks.clear();
+  saveBookmarks();
+  if (bookmarkOnly) render();                              // 북마크만 보기 상태였다면 목록 갱신
+  showAddMsg(`북마크 ${n}개 해제됨 ✓`, true);
+};
+updateBmCount();
 
 /* ===== CSV 파일에서 가져오기 (일본어단어, 히라가나, 한국어뜻[, 예문일본어, 예문히라가나, 예문한국어]) ===== */
 const csvFile = document.getElementById("csvFile");
