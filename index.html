@@ -10,7 +10,10 @@
   <!-- 상단 드래그 바 (공용) -->
   <div id="bar">
     <span id="title">홈</span>
-    <button id="hideBtn" title="숨기기 (Esc)">✕</button>
+    <span class="bar-btns">
+      <button id="fitBtn" title="위아래로 꽉 채우기 / 되돌리기">⇕</button>
+      <button id="hideBtn" title="숨기기 (Esc)">✕</button>
+    </span>
   </div>
 
   <!-- ===== 홈 화면 (Alt+1) ===== -->
@@ -66,6 +69,12 @@
       <!-- 플래시카드 모드 -->
       <div id="flash">
         <div class="flash-stage">
+          <!-- 탐색 바: 끌거나 클릭해서 덱 안의 위치로 이동 -->
+          <div class="fc-seek" id="fcSeek" title="끌거나 클릭해서 이동">
+            <div class="fc-seek-track"></div>
+            <div class="fc-seek-fill" id="fcSeekFill"></div>
+            <div class="fc-seek-thumb" id="fcSeekThumb" tabindex="0"></div>
+          </div>
           <!-- 앞면(일본어)만 보이다가 클릭 시 같은 카드 안에 히라가나·뜻이 펼쳐짐 -->
           <div class="flashcard" id="flashcard">
             <div class="fc-face">

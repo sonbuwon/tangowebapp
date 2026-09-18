@@ -233,6 +233,10 @@ function clearAllWords() {
 // 렌더러(게임)에서 안전하게 호출할 수 있는 최소한의 다리
 contextBridge.exposeInMainWorld('boss', {
   hide: () => ipcRenderer.send('boss:hide'),
+  // 세로 꽉 채우기 토글 → Promise<boolean> (true=꽉 채움 상태)
+  fitHeight: () => ipcRenderer.invoke('boss:fitHeight'),
+  // 메인에서 꽉 채움 상태가 바뀌었을 때(사용자가 직접 크기 조절 등) 알림
+  onFitHeight: (cb) => ipcRenderer.on('fitHeight', (_e, on) => cb(on)),
   // 메인 프로세스가 보낸 화면 전환 신호 ('vocab' | 'input' | 'sentences')
   onView: (cb) => ipcRenderer.on('view', (_e, v) => cb(v)),
   // words.csv 에서 읽어온 단어 목록

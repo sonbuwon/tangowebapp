@@ -170,6 +170,7 @@ function showCard() {
   const exJp = document.getElementById("fcExJp");
   const exHira = document.getElementById("fcExHira");
   const exKr = document.getElementById("fcExKr");
+  updateSeek();
   if (deck.length === 0) {
     fc.classList.remove("revealed");
     document.getElementById("fcKana").textContent = "단어 없음";
@@ -196,6 +197,45 @@ function showCard() {
   bm.classList.toggle("on", marked);
   bm.textContent = marked ? "★" : "☆";
 }
+/* ── 탐색 바: 현재 위치 표시 + 끌기/클릭으로 idx 이동 ── */
+const fcSeek = document.getElementById("fcSeek");
+const fcSeekFill = document.getElementById("fcSeekFill");
+const fcSeekThumb = document.getElementById("fcSeekThumb");
+function updateSeek() {
+  const n = deck.length;
+  fcSeek.classList.toggle("disabled", n <= 1);
+  const pct = n <= 1 ? 0 : (idx / (n - 1)) * 100;
+  fcSeekThumb.style.left = pct + "%";
+  fcSeekFill.style.width = pct + "%";
+}
+function seekIndexFromX(clientX) {
+  const n = deck.length;
+  if (n <= 1) return 0;
+  const r = fcSeek.getBoundingClientRect();
+  const p = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+  return Math.round(p * (n - 1));
+}
+function seekTo(i) {
+  if (!deck.length || i === idx) return;
+  idx = i;
+  showCard();
+}
+(() => {
+  let dragging = false;
+  fcSeek.addEventListener("pointerdown", e => {
+    if (!deck.length) return;
+    e.preventDefault();
+    dragging = true;
+    fcSeek.setPointerCapture(e.pointerId);
+    fcSeek.classList.add("dragging");
+    seekTo(seekIndexFromX(e.clientX));          // 클릭한 위치로 즉시 이동
+  });
+  fcSeek.addEventListener("pointermove", e => { if (dragging) seekTo(seekIndexFromX(e.clientX)); });
+  const end = () => { dragging = false; fcSeek.classList.remove("dragging"); };
+  fcSeek.addEventListener("pointerup", end);
+  fcSeek.addEventListener("pointercancel", end);
+})();
+
 /* 카드 클릭/↑ → 같은 화면에서 히라가나·뜻 펼치기/접기 */
 function flip() { if (deck.length) document.getElementById("flashcard").classList.toggle("revealed"); }
 function prev() { if (!deck.length) return; idx = (idx - 1 + deck.length) % deck.length; showCard(); }
@@ -322,6 +362,15 @@ document.addEventListener("keydown", e => {
 
 /* 상단 ✕ → 창 숨김 */
 document.getElementById("hideBtn").addEventListener("click", () => window.boss?.hide());
+
+/* 상단 ⇕ → 창을 위아래로 꽉 채우기 / 되돌리기 (Electron 메인에서 처리, 상태에 따라 버튼 강조) */
+const fitBtn = document.getElementById("fitBtn");
+function setFitBtn(on) { fitBtn.classList.toggle("on", !!on); }
+fitBtn.addEventListener("click", async () => {
+  if (!window.boss?.fitHeight) return;
+  setFitBtn(await window.boss.fitHeight());
+});
+window.boss?.onFitHeight?.(setFitBtn);   // 사용자가 직접 크기를 바꿔 해제된 경우 반영
 
 /* ===== 단어 입력 화면 (CSV 가져오기 전용) ===== */
 const addMsg = document.getElementById("addMsg");

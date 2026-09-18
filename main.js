@@ -97,6 +97,30 @@ function toggle() {
   visible ? hide() : show();
 }
 
+// ── 세로 꽉 채우기 토글 ──────────────────────────────────────────
+// 켜면 창이 있는 모니터의 작업 영역(작업표시줄 제외) 높이에 맞춰 위아래로 늘리고,
+// 다시 누르면 이전 크기·위치로 복구. 사용자가 직접 크기를 바꾸면 상태를 해제.
+let fitState = null;        // { x, y, width, height } 복구용 (null 이면 꺼짐)
+let settingBounds = false;  // 우리가 setBounds 하는 동안 resize 이벤트 무시용
+function toggleFitHeight() {
+  if (!win) return false;
+  settingBounds = true;
+  try {
+    if (fitState) {
+      win.setBounds(fitState);
+      fitState = null;
+    } else {
+      const cur = win.getBounds();
+      const { workArea } = screen.getDisplayMatching(cur);
+      fitState = cur;
+      win.setBounds({ x: cur.x, y: workArea.y, width: cur.width, height: workArea.height });
+    }
+  } finally {
+    settingBounds = false;
+  }
+  return !!fitState;
+}
+
 // 화면 전환: 창을 띄우고 렌더러에 전환 신호 전송
 function switchView(view) {
   show();
@@ -143,6 +167,14 @@ app.whenReady().then(() => {
 
   // 렌더러(게임 화면)에서 Esc를 누르면 숨김 요청이 옴
   ipcMain.on('boss:hide', hide);
+  // 제목 표시줄 '세로 꽉 채우기' 버튼 → 토글 후 현재 상태(true=켜짐) 반환
+  ipcMain.handle('boss:fitHeight', () => toggleFitHeight());
+  // 사용자가 직접 크기를 바꾸면 꽉 채움 상태 해제 (버튼 표시도 갱신)
+  win.on('resize', () => {
+    if (settingBounds || !fitState) return;
+    fitState = null;
+    win.webContents.send('fitHeight', false);
+  });
 });
 
 // 트레이 앱이므로 모든 창이 닫혀도 종료하지 않음

@@ -34,14 +34,16 @@ html, body {
   -webkit-app-region: drag;          /* 잡고 끌면 창 이동 */
 }
 #title { font-size: 12px; color: var(--accent); letter-spacing: 2px; }
-#hideBtn {
+.bar-btns { display: flex; gap: 2px; -webkit-app-region: no-drag; }
+#hideBtn, #fitBtn {
   -webkit-app-region: no-drag;
   width: 22px; height: 22px;
   border: none; border-radius: 5px;
   background: transparent; color: var(--sub);
   cursor: pointer; font-size: 13px; line-height: 1;
 }
-#hideBtn:hover { background: var(--accent-soft); color: var(--text); }
+#hideBtn:hover, #fitBtn:hover { background: var(--accent-soft); color: var(--text); }
+#fitBtn.on { color: var(--text); background: var(--accent-light); }   /* 꽉 채움 상태 */
 
 /* 화면 컨테이너 (단어장 / 리더) */
 .screen { height: calc(100% - 30px); display: flex; flex-direction: column; }
@@ -509,6 +511,21 @@ html, body {
 /* ===== 플래시카드 모드 ===== */
 #flash { display: none; }
 .flash-stage { display: flex; flex-direction: column; align-items: center; margin-top: 8px; }
+/* 플래시카드 위 탐색 바 (끌기/클릭으로 위치 이동) */
+.fc-seek {
+  position: relative; width: 100%; max-width: 380px; height: 28px; margin-bottom: 10px;
+  cursor: pointer; touch-action: none; user-select: none;
+}
+.fc-seek-track { position: absolute; left: 0; right: 0; top: 50%; height: 4px; margin-top: -2px; background: var(--line); border-radius: 2px; }
+.fc-seek-fill { position: absolute; left: 0; top: 50%; height: 4px; margin-top: -2px; background: var(--accent); border-radius: 2px; }
+.fc-seek-thumb {
+  position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px;
+  border-radius: 50%; background: var(--text); border: 2px solid var(--accent);
+  box-shadow: 0 2px 6px rgba(0,0,0,.4); cursor: grab; outline: none; transition: box-shadow .12s;
+}
+.fc-seek-thumb:focus, .fc-seek.dragging .fc-seek-thumb { border-color: #fff; box-shadow: 0 0 0 4px rgba(170,178,192,.25); }
+.fc-seek.dragging .fc-seek-thumb { cursor: grabbing; }
+.fc-seek.disabled { opacity: .35; pointer-events: none; }
 /* 뒤집기 대신 한 카드 안에서 펼쳐 보기: .revealed 가 붙으면 히라가나·뜻 표시 */
 .flashcard { width: 100%; max-width: 380px; cursor: pointer; }
 .fc-face {
