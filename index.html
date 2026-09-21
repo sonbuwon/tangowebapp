@@ -116,7 +116,45 @@
       <div id="importHelp">CSV 형식: 일본어단어 , 히라가나 , 한국어뜻 [, 예문일본어 , 예문히라가나 , 예문한국어]</div>
       <!-- 북마크 전체 해제 (단어는 삭제하지 않음) -->
       <button type="button" id="clearBmBtn">★ 북마크 전체 해제</button>
+      <!-- 결과 메시지 ('~개 추가' 등): 전체 해제 버튼과 개별 단어 추가 사이 -->
       <div id="addMsg"></div>
+
+      <!-- 개별 단어 추가 (소속 리스트 없음 → words.csv 의 list 열 빈 값) -->
+      <form id="indivForm" autocomplete="off">
+        <div class="indiv-title">개별 단어 추가</div>
+        <label class="field">
+          <span>일본어 단어 <em>*</em></span>
+          <input id="inWord" type="text" placeholder="한자 (한자가 없으면 히라가나)" />
+        </label>
+        <label class="field">
+          <span>히라가나</span>
+          <input id="inKana" type="text" placeholder="읽기 (위 칸이 히라가나면 비워두세요)" />
+        </label>
+        <label class="field">
+          <span>한국어 뜻 <em>*</em></span>
+          <input id="inMean" type="text" placeholder="한국어 뜻" />
+        </label>
+        <details class="indiv-ex">
+          <summary>예문 (선택)</summary>
+          <label class="field">
+            <span>예문 일본어</span>
+            <input id="inExJp" type="text" placeholder="일본어 문장" />
+          </label>
+          <label class="field">
+            <span>예문 히라가나</span>
+            <input id="inExHira" type="text" placeholder="히라가나 문장" />
+          </label>
+          <label class="field">
+            <span>예문 한국어</span>
+            <input id="inExKr" type="text" placeholder="한국어 해석" />
+          </label>
+        </details>
+        <button type="submit" id="indivAddBtn">추가</button>
+      </form>
+
+      <!-- 개별 단어만 CSV 로 추출 (CSV 가져오기와 같은 열 구성이라 다시 불러올 수 있음) -->
+      <button type="button" id="exportIndivBtn">개별 단어 CSV 추출</button>
+      <div id="exportHelp">소속 리스트가 없는 단어만 CSV 파일로 저장합니다 (가져오기와 같은 형식)</div>
     </div>
   </div>
 

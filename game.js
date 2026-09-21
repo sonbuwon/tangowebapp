@@ -11,7 +11,7 @@ let hideMean = false;
 let hideKana = false;
 let curRow = "all";        // 행 필터: all / あ / か / ...
 let bookmarkOnly = false;  // 북마크만 보기
-let currentList = null;    // 선택된 리스트: null=전체, "제목"=CSV 리스트
+let currentList = null;    // 선택된 리스트: null=전체, ""=개별 단어, "제목"=CSV 리스트
 
 /* ===== 리스트 메타(생성시각) — 홈 최신순 정렬용 (localStorage) ===== */
 const LISTS_KEY = "vocabLists";
@@ -413,6 +413,88 @@ document.getElementById("clearBmBtn").onclick = () => {
 };
 updateBmCount();
 
+/* ===== 개별 단어 (소속 리스트 없음, list="") ===== */
+const INDIV_LABEL = "개별 단어";    // 홈·시험 범위·제목에 표시되는 개별 리스트 이름
+function isIndiv(w) { return !(w.list || ""); }
+function indivWords() { return WORDS.filter(isIndiv); }
+/* '개별 단어 CSV 추출' 버튼에 현재 개별 단어 개수 표시 (없으면 비활성) */
+function updateIndivCount() {
+  const btn = document.getElementById("exportIndivBtn");
+  if (!btn) return;
+  const n = indivWords().length;
+  btn.textContent = `개별 단어 CSV 추출 (${n}개)`;
+  btn.disabled = n === 0;
+}
+
+/* ── 개별 단어 추가 폼 ──
+   입력 규칙은 CSV 가져오기와 동일: 히라가나 칸이 있으면 kana=히라가나·kanji=일본어,
+   비어 있으면 일본어 칸 자체를 kana 로 쓰고 kanji 없음. 저장 시 list="" (개별). */
+const indivForm = document.getElementById("indivForm");
+const inWord = document.getElementById("inWord");
+const inKana = document.getElementById("inKana");
+const inMean = document.getElementById("inMean");
+const inExJp = document.getElementById("inExJp");
+const inExHira = document.getElementById("inExHira");
+const inExKr = document.getElementById("inExKr");
+
+indivForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const c0 = inWord.value.trim(), c1 = inKana.value.trim(), c2 = inMean.value.trim();
+  if (!c0) { showAddMsg("일본어 단어를 입력하세요.", false); inWord.focus(); return; }
+  if (!c2) { showAddMsg("한국어 뜻을 입력하세요.", false); inMean.focus(); return; }
+  let kana, kanji;
+  if (c1 && c1 !== "-") { kana = c1; kanji = c0; } else { kana = c0; kanji = ""; }
+  const w = { row: rowFromKana(kana) || "", kana, kanji, mean: c2, list: "" };
+  const exJp = inExJp.value.trim();
+  if (exJp) w.ex = { jp: exJp, hira: inExHira.value.trim(), kr: inExKr.value.trim() };
+
+  if (WORDS.some(x => wordKey(x) === wordKey(w))) { showAddMsg("이미 있는 단어입니다.", false); return; }
+  const res = window.boss?.addWord(w);
+  if (!res || !res.ok) {
+    showAddMsg("저장 실패: " + ((res && res.error) || "알 수 없음"), false);
+    return;
+  }
+  WORDS.push(w);                                   // 메모리 목록에도 즉시 반영
+  updateIndivCount();
+  showAddMsg(`추가됨 ✓  ${w.kanji || w.kana} — ${w.mean}`, true);
+  [inWord, inKana, inMean, inExJp, inExHira, inExKr].forEach(el => { el.value = ""; });
+  inWord.focus();
+});
+
+/* ── 개별 단어만 CSV 로 추출 ──
+   열 구성은 'CSV 파일에서 추가' 와 동일 (일본어단어, 히라가나, 한국어뜻, 예문일본어, 예문히라가나, 예문한국어)
+   → 저장한 파일을 그대로 다시 가져올 수 있음. 엑셀 호환을 위해 UTF-8 BOM + CRLF. */
+function csvCell(v) {
+  v = v == null ? "" : String(v);
+  return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+}
+function buildIndivCsv(list) {
+  const header = ["일본어단어", "히라가나", "한국어뜻", "예문일본어", "예문히라가나", "예문한국어"];
+  const lines = [header.join(",")];
+  for (const w of list) {
+    const ex = w.ex || {};
+    // 한자가 있으면 일본어=한자·히라가나=kana, 없으면 일본어=kana·히라가나 빈 값 (가져오기 규칙과 대칭)
+    const cells = w.kanji ? [w.kanji, w.kana] : [w.kana, ""];
+    lines.push([...cells, w.mean || "", ex.jp || "", ex.hira || "", ex.kr || ""].map(csvCell).join(","));
+  }
+  return "\uFEFF" + lines.join("\r\n") + "\r\n";
+}
+document.getElementById("exportIndivBtn").onclick = () => {
+  const list = indivWords();
+  if (!list.length) { showAddMsg("추출할 개별 단어가 없습니다.", false); return; }
+  const d = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  const name = `개별단어_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}.csv`;
+  const blob = new Blob([buildIndivCsv(list)], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showAddMsg(`개별 단어 ${list.length}개 CSV 추출 ✓ (${name})`, true);
+};
+updateIndivCount();
+
 /* ===== CSV 파일에서 가져오기 (일본어단어, 히라가나, 한국어뜻[, 예문일본어, 예문히라가나, 예문한국어]) ===== */
 const csvFile = document.getElementById("csvFile");
 const importBtn = document.getElementById("importBtn");
@@ -497,6 +579,7 @@ function importCsvText(text, title) {
   }
   fresh.forEach(w => WORDS.push(w));
   if (listName) recordList(listName);                  // 홈 최신순 정렬용 기록
+  updateIndivCount();
   const dupCount = candidates.length - fresh.length;
   showAddMsg(`"${listName}"에 ${res.added}개 추가${dupCount ? `, ${dupCount}개 중복 제외` : ""} ✓`, true);
 }
@@ -511,6 +594,8 @@ function renderHome() {
   homeList.innerHTML = "";
   // 전체 (최상단) — 모든 단어
   homeList.appendChild(makeDeckRow("전체", null, WORDS.length, false));
+  // 개별 단어 (전체 바로 아래) — 소속 리스트 없는 단어, 삭제·순서 변경 불가
+  homeList.appendChild(makeDeckRow(INDIV_LABEL, "", indivWords().length, false));
   // CSV 리스트: 사용자가 지정한 순서(없으면 최신순)
   const names = orderedListNames();
   if (names.length < 2) reorderMode = false;          // 바꿀 게 없으면 순서 변경 모드 해제
@@ -631,6 +716,7 @@ function deleteList(name, label) {
   saveLists(loadLists().filter(m => m.name !== name));   // 리스트 메타 제거
   saveOrder(loadOrder().filter(n => n !== name));        // 저장된 순서에서도 제거
   if (currentList === name) currentList = null;
+  updateIndivCount();
   renderHome();
 }
 
@@ -705,6 +791,8 @@ function showQuizPicker() {
   quizPickList.appendChild(makeQuizPickRow("★ 북마크", { type: "bookmark" }, bmCount));
   // 전체
   quizPickList.appendChild(makeQuizPickRow("전체", { type: "list", list: null }, WORDS.length));
+  // 개별 단어 (홈과 동일하게 전체 바로 아래)
+  quizPickList.appendChild(makeQuizPickRow(INDIV_LABEL, { type: "list", list: "" }, indivWords().length));
   // CSV 리스트 (홈과 동일 정렬 — 홈에서 지정한 순서를 따름)
   orderedListNames().forEach(name => {
     const count = WORDS.filter(w => (w.list || "") === name).length;
@@ -1281,6 +1369,7 @@ function setView(view) {
   let t = TITLES[view] || "";
   if (view === "vocab" || view === "flash") {
     if (currentList === null) t = "전체";
+    else if (currentList === "") t = INDIV_LABEL;
     else t = currentList;
   }
   document.getElementById("title").textContent = t;

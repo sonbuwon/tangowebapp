@@ -410,6 +410,52 @@ html, body {
 #clearBmBtn:hover { background: #4a2323; color: #ff8a8a; }
 #clearBmBtn:disabled { opacity: .45; cursor: default; }
 
+/* 개별 단어 추가 폼 */
+#indivForm {
+  display: flex; flex-direction: column; gap: 12px;
+  max-width: 360px; margin: 18px auto 0;
+  padding-top: 16px; border-top: 1px solid var(--line);
+}
+.indiv-title { font-size: .84rem; font-weight: 700; color: var(--accent); }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field > span { font-size: .78rem; color: var(--accent); font-weight: 600; }
+.field em { color: #e06b6b; font-style: normal; }
+.field input {
+  background: var(--card); color: var(--text);
+  border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 11px; font-size: .92rem; outline: none;
+  user-select: text;                 /* 입력 필드는 선택/편집 허용 */
+  font-family: inherit;
+}
+.field input:focus { border-color: var(--accent); }
+.field input::placeholder { color: var(--sub); }
+.indiv-ex { display: flex; flex-direction: column; gap: 10px; }
+.indiv-ex summary {
+  font-size: .78rem; color: var(--sub); font-weight: 600; cursor: pointer; user-select: none;
+}
+.indiv-ex summary:hover { color: var(--text); }
+#indivAddBtn {
+  margin-top: 2px; padding: 9px;
+  border: 1px solid var(--accent); border-radius: 9px;
+  background: var(--accent-soft); color: var(--text);
+  font-size: .86rem; font-weight: 700; cursor: pointer; transition: .15s;
+}
+#indivAddBtn:hover { background: var(--accent-light); }
+
+/* 개별 단어 CSV 추출 */
+#exportIndivBtn {
+  display: block; max-width: 360px; margin: 18px auto 0; width: 100%;
+  padding: 9px; border: 1px solid var(--line); border-radius: 9px;
+  background: transparent; color: var(--accent);
+  font-size: .86rem; font-weight: 700; cursor: pointer; transition: .15s;
+}
+#exportIndivBtn:hover { background: var(--accent-soft); color: var(--text); }
+#exportIndivBtn:disabled { opacity: .45; cursor: default; }
+#exportHelp {
+  max-width: 360px; margin: 6px auto 0;
+  font-size: .72rem; color: var(--sub); text-align: center;
+}
+
 /* ===== 리더 화면 ===== */
 #readerBar {
   display: flex; align-items: center; justify-content: space-between;
