@@ -1003,8 +1003,25 @@ const DAKUTEN_PAIRS = [
   ["かきくけこさしすせそたちつてとはひふへほ", "がぎぐげござじずぜぞだぢづでどばびぶべぼ"],
   ["はひふへほ", "ぱぴぷぺぽ"], ["ばびぶべぼ", "ぱぴぷぺぽ"],
 ];
-const SMALL_PAIRS = ["やゃ", "ゆゅ", "よょ", "つっ", "あぁ", "いぃ", "うぅ", "えぇ", "おぉ"];
+const SMALL_PAIRS = ["やゃ", "ゆゅ", "よょ", "つっ"];   // 작은 ぁぃぅぇぉ 는 고유어 표기에 쓰이지 않으므로 제외
 const SMALL_KANA = "ゃゅょぁぃぅぇぉっ";
+// 일본어 표기로 성립하는 히라가나 열인지 검사 (오답 보기 필터)
+//   · 작은 글자(ゃゅょっ)·ん·ー 로 시작 불가   · っ 로 끝나지 않음
+//   · ゃゅょ 는 い단 글자 뒤에만               · っ 뒤에는 か·さ·た·ぱ행만
+//   · 작은 글자 연속 불가
+function isValidKana(s) {
+  const c = [...s];
+  if (!c.length) return false;
+  if (SMALL_KANA.includes(c[0]) || c[0] === "ん" || c[0] === "ー") return false;
+  if (c[c.length - 1] === "っ") return false;
+  for (let i = 0; i < c.length; i++) {
+    const ch = c[i], prev = c[i - 1], nxt = c[i + 1];
+    if ("ゃゅょ".includes(ch) && !(prev && "きしちにひみりぎじぢびぴ".includes(prev))) return false;
+    if (ch === "っ" && !(nxt && "かきくけこさしすせそたちつてとぱぴぷぺぽ".includes(nxt))) return false;
+    if (SMALL_KANA.includes(ch) && prev && SMALL_KANA.includes(prev)) return false;
+  }
+  return true;
+}
 // 정답에서 한 군데만 바꾼 변형들.
 //   tier 1a = 가장 비슷(탁점·작은 글자 토글·장음), tier 1b = 인접 교환·촉음 삽입,
 //   tier 2 = 같은 행 모음 변경, tier 3 = 글자 삭제
@@ -1044,19 +1061,66 @@ function editDistance(a, b) {
     d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
   return d[m][n];
 }
-// 정답 kana 와 비슷한 오답 보기 count 개.
-// 변형(tier1a) → 비슷한 실제 읽기 → 변형(tier1b) → 변형(tier2/3) → 무작위 실제 읽기 순으로 채움
-function similarKana(kana, count) {
+/* 한자+히라가나(오쿠리가나) 단어의 표기와 읽기를 맞춤.
+   표기를 [한자 묶음 | かな 묶음]으로 나누고, かな 묶음은 읽기에서도 같은 자리에 그대로 있어야 한다.
+   예) 食べる / たべる → [한자:た][かな:べる],  取り消す / とりけす → [한자:と][かな:り][한자:け][かな:す]
+   반환: { parts:[{fixed, text}], re } / 전부 한자·전부 かな·맞지 않으면 null */
+const isKanaChar = c => /[ぁ-ゖァ-ヺー]/.test(c);
+function okuriganaPattern(kanji, kana) {
+  if (!kanji || kanji === kana) return null;
+  const segs = [];
+  for (const ch of kanji) {
+    const k = isKanaChar(ch);
+    if (segs.length && segs[segs.length - 1].kana === k) segs[segs.length - 1].text += ch;
+    else segs.push({ kana: k, text: ch });
+  }
+  if (!segs.some(s => s.kana) || !segs.some(s => !s.kana)) return null;
+  const re = new RegExp("^" + segs.map(s => s.kana ? s.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : "(.+?)").join("") + "$");
+  const m = kana.match(re);
+  if (!m) return null;
+  let gi = 1;
+  return { parts: segs.map(s => s.kana ? { fixed: true, text: s.text } : { fixed: false, text: m[gi++] }), re };
+}
+// 오쿠리가나 단어의 변형: かな 부분은 고정하고 한자 읽기 부분만 한 군데씩 바꿔 조립
+function mixedVariants(parts) {
+  const tiers = [[], [], [], []];
+  parts.forEach((p, i) => {
+    if (p.fixed) return;
+    kanaVariants(p.text).forEach((list, ti) => {
+      list.forEach(v => tiers[ti].push(parts.map((q, j) => (j === i ? v : q.text)).join("")));
+    });
+  });
+  return tiers;
+}
+/* 정답 단어 w 와 헷갈리는 오답 읽기 count 개.
+   · 전부 한자 단어  : 단어장에 실제로 있는 읽기에서 (비슷한 것 → 길이 같은 것 → 아무거나). 부족할 때만 변형.
+   · 한자+히라가나  : 히라가나 부분을 같은 자리에 고정한 변형 → 같은 오쿠리가나 패턴의 실제 읽기 → 나머지 변형.
+   · 변형은 모두 isValidKana 를 통과한 것만 사용 (작은 글자로 시작하는 등 불가능한 표기 제외). */
+function similarKana(w, count) {
+  const kana = w.kana;
   const used = new Set([kana]);
   const out = [];
   const take = (list) => { for (const k of shuffled(list)) { if (out.length >= count) return; if (!used.has(k)) { used.add(k); out.push(k); } } };
-  const [t1a, t1b, t2, t3] = kanaVariants(kana);
-  const real = WORDS.map(w => w.kana).filter(k => k && k !== kana);
+  const valid = list => list.filter(isValidKana);
+  const real = WORDS.map(x => x.kana).filter(k => k && k !== kana);
   const realSimilar = real.filter(k => editDistance(k, kana) <= 2);
-  take(t1a); take(realSimilar); take(t1b); take(t2); take(t3); take(real);
+  const pat = okuriganaPattern(w.kanji, kana);
+  if (pat) {
+    const [t1a, t1b, t2, t3] = mixedVariants(pat.parts).map(valid);
+    const realSamePattern = real.filter(k => pat.re.test(k));
+    take(t1a); take(realSamePattern); take(t1b); take(t2); take(t3);
+    take(realSimilar); take(real);
+  } else {
+    const len = [...kana].length;
+    take(realSimilar);
+    take(real.filter(k => [...k].length === len));
+    take(real);
+    const [t1a, t1b, t2, t3] = kanaVariants(kana).map(valid);
+    take(t1a); take(t1b); take(t2); take(t3);
+  }
   return out;
 }
-function buildKanaOptions(w) { return shuffled([w.kana, ...similarKana(w.kana, 3)]); }
+function buildKanaOptions(w) { return shuffled([w.kana, ...similarKana(w, 3)]); }
 // 한국어 뜻 보기: 구간 → 범위 → 전체 순으로 다른 뜻을 가져옴
 function buildMeanOptions(w) {
   const used = new Set([w.mean]);
