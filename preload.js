@@ -97,7 +97,7 @@ function addWordToCsv(w) {
   }
 }
 
-/* ── words.csv 에 여러 단어 일괄 추가 (CSV 가져오기용, 중복 제외) ── */
+/* ── words.csv 에 여러 단어 일괄 추가 (CSV 가져오기용, 같은 주제 내 중복 제외) ── */
 function addWordsToCsv(list) {
   try {
     if (!Array.isArray(list) || !list.length) return { ok: false, error: '추가할 단어 없음' };
@@ -108,15 +108,14 @@ function addWordsToCsv(list) {
     const eol = text.includes('\r\n') ? '\r\n' : '\n';
     const lines = text.split(/\r?\n/);
     while (lines.length && lines[lines.length - 1] === '') lines.pop();
+    // 중복 기준: 같은 리스트(주제) 안의 kana+kanji — 다른 주제에 같은 단어가 있어도 추가
+    // list 열(col8)은 뜻 뒤라 따옴표 영향 → 전체 파싱으로 읽음
     const existing = new Set();
-    for (let i = 1; i < lines.length; i++) {
-      const p = lines[i].split(',');
-      existing.add(p[1] + '|' + (p[2] || ''));
-    }
+    parseCSV(text).slice(1).forEach(r => existing.add((r[1] || '') + '|' + (r[2] || '') + '|' + (r[7] || '')));
     let added = 0, skipped = 0;
     for (const w of list) {
       if (!w || !w.kana) { skipped++; continue; }
-      const key = w.kana + '|' + (w.kanji || '');
+      const key = w.kana + '|' + (w.kanji || '') + '|' + (w.list || '');
       if (existing.has(key)) { skipped++; continue; }
       existing.add(key);
       lines.push(wordLine(w));           // 파일 끝에 순서대로 추가 → CSV 세트 원본 순서 유지

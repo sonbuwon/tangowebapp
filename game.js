@@ -448,7 +448,8 @@ indivForm.addEventListener("submit", (e) => {
   const exJp = inExJp.value.trim();
   if (exJp) w.ex = { jp: exJp, hira: inExHira.value.trim(), kr: inExKr.value.trim() };
 
-  if (WORDS.some(x => wordKey(x) === wordKey(w))) { showAddMsg("이미 있는 단어입니다.", false); return; }
+  // 같은 리스트(개별) 안에서만 중복 검사 — 다른 주제에 있는 단어는 다시 추가 가능
+  if (WORDS.some(x => isIndiv(x) && wordKey(x) === wordKey(w))) { showAddMsg("이미 개별 단어에 있는 단어입니다.", false); return; }
   const res = window.boss?.addWord(w);
   if (!res || !res.ok) {
     showAddMsg("저장 실패: " + ((res && res.error) || "알 수 없음"), false);
@@ -563,15 +564,15 @@ function importCsvText(text, title) {
     candidates.push(w);
   }
   if (!candidates.length) { showAddMsg("가져올 단어가 없습니다.", false); return; }
-  // 기존/자체 중복 제외
-  const seen = new Set(WORDS.map(w => w.kana + "|" + (w.kanji || "")));
+  // 같은 주제 안의 기존/자체 중복만 제외 — 다른 주제에 있는 단어는 이 주제에도 추가
+  const seen = new Set(WORDS.filter(w => (w.list || "") === listName).map(wordKey));
   const fresh = [];
   for (const w of candidates) {
-    const k = w.kana + "|" + (w.kanji || "");
+    const k = wordKey(w);
     if (seen.has(k)) continue;
     seen.add(k); fresh.push(w);
   }
-  if (!fresh.length) { showAddMsg("모두 이미 있는 단어입니다.", false); return; }
+  if (!fresh.length) { showAddMsg(`모두 이미 "${listName}"에 있는 단어입니다.`, false); return; }
   const res = window.boss?.addWords(fresh);
   if (!res || !res.ok) {
     showAddMsg("CSV 추가 실패: " + ((res && res.error) || "알 수 없음"), false);
@@ -710,8 +711,11 @@ function deleteList(name, label) {
   const res = window.boss?.deleteList(name);
   if (!res || !res.ok) { alert("주제 삭제 실패: " + ((res && res.error) || "알 수 없음")); return; }
   for (let i = WORDS.length - 1; i >= 0; i--) {
-    if ((WORDS[i].list || "") === name) { bookmarks.delete(wordKey(WORDS[i])); WORDS.splice(i, 1); }
+    if ((WORDS[i].list || "") === name) WORDS.splice(i, 1);
   }
+  // 북마크는 kana|kanji 기준이라, 다른 주제에 같은 단어가 남아 있으면 유지
+  const remain = new Set(WORDS.map(wordKey));
+  for (const k of [...bookmarks]) if (!remain.has(k)) bookmarks.delete(k);
   saveBookmarks();
   saveLists(loadLists().filter(m => m.name !== name));   // 리스트 메타 제거
   saveOrder(loadOrder().filter(n => n !== name));        // 저장된 순서에서도 제거
