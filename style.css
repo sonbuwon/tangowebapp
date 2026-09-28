@@ -396,10 +396,19 @@ html, body {
   font-size: .86rem; font-weight: 700; cursor: pointer; transition: .15s;
 }
 #importBtn:hover { background: var(--accent-light); }
-#importHelp {
+#importHelp, #exportHelp {
   max-width: 360px; margin: 6px auto 0;
   font-size: .72rem; color: var(--sub); text-align: center;
 }
+/* JSON 내보내기 */
+#exportBtn {
+  display: block; max-width: 360px; margin: 16px auto 0; width: 100%;
+  padding: 9px; border: 1px solid var(--line); border-radius: 9px;
+  background: var(--card); color: var(--accent);
+  font-size: .86rem; font-weight: 700; cursor: pointer; transition: .15s;
+}
+#exportBtn:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+#exportBtn:disabled { opacity: .45; cursor: default; }
 /* 북마크 전체 해제 */
 #clearBmBtn {
   display: block; max-width: 360px; margin: 16px auto 0; width: 100%;

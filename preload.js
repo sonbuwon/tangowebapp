@@ -52,7 +52,7 @@ function loadWords() {
     const rows = parseCSV(text);
     rows.shift(); // 헤더 행 제거
     return rows
-      .filter(r => r[0] !== undefined && r[0] !== '')
+      .filter(r => r[1] !== undefined && r[1] !== '')   // かな 가 있는 줄만 (row 가 비어도 단어는 유지)
       .map(r => {
         const [row, kana, kanji, mean, jp, hira, kr, list] = r;
         const w = { row, kana, kanji: kanji || '', mean: mean || '', list: list || '' };
@@ -234,6 +234,8 @@ contextBridge.exposeInMainWorld('boss', {
   hide: () => ipcRenderer.send('boss:hide'),
   // 세로 꽉 채우기 토글 → Promise<boolean> (true=꽉 채움 상태)
   fitHeight: () => ipcRenderer.invoke('boss:fitHeight'),
+  // 전체 단어 JSON 내보내기 (저장 대화상자) → Promise<{ ok, path?, canceled?, error? }>
+  exportJson: (text, defaultName) => ipcRenderer.invoke('boss:exportJson', text, defaultName),
   // 메인에서 꽉 채움 상태가 바뀌었을 때(사용자가 직접 크기 조절 등) 알림
   onFitHeight: (cb) => ipcRenderer.on('fitHeight', (_e, on) => cb(on)),
   // 메인 프로세스가 보낸 화면 전환 신호 ('vocab' | 'input' | 'sentences')

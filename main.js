@@ -1,5 +1,6 @@
-const { app, BrowserWindow, globalShortcut, Tray, Menu, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, globalShortcut, Tray, Menu, ipcMain, screen, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 // ── 설정 (여기 숫자/키만 바꾸면 동작이 바뀝니다) ──────────────────
 const WIN_W = 440;          // 창 너비(px)
@@ -169,6 +170,21 @@ app.whenReady().then(() => {
   ipcMain.on('boss:hide', hide);
   // 제목 표시줄 '세로 꽉 채우기' 버튼 → 토글 후 현재 상태(true=켜짐) 반환
   ipcMain.handle('boss:fitHeight', () => toggleFitHeight());
+  // 전체 단어 JSON 내보내기: 저장 위치를 물어본 뒤 파일로 기록 → { ok, path } / { ok:false, canceled } / { ok:false, error }
+  ipcMain.handle('boss:exportJson', async (_e, text, defaultName) => {
+    try {
+      const { canceled, filePath } = await dialog.showSaveDialog(win, {
+        title: '단어 JSON 내보내기',
+        defaultPath: path.join(app.getPath('documents'), defaultName || 'words.json'),
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      });
+      if (canceled || !filePath) return { ok: false, canceled: true };
+      fs.writeFileSync(filePath, text, 'utf8');
+      return { ok: true, path: filePath };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
   // 사용자가 직접 크기를 바꾸면 꽉 채움 상태 해제 (버튼 표시도 갱신)
   win.on('resize', () => {
     if (settingBounds || !fitState) return;

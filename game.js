@@ -401,6 +401,45 @@ function showAddMsg(text, ok) {
   addMsg.className = ok ? "ok" : "err";
 }
 
+/* ===== 전체 단어 JSON 내보내기 =====
+   앱에 등록된 모든 단어(모든 주제)를 파일 순서 그대로 배열로 만든다.
+   항목: kanji(일본어단어), kana(히라가나), mean(한국어뜻), ex_jp, ex_hira, ex_kr(예문 3종), list(주제) */
+function buildExportJson() {
+  const rows = WORDS.map(w => ({
+    kanji: w.kanji || "",
+    kana: w.kana || "",
+    mean: w.mean || "",
+    ex_jp: (w.ex && w.ex.jp) || "",
+    ex_hira: (w.ex && w.ex.hira) || "",
+    ex_kr: (w.ex && w.ex.kr) || "",
+    list: w.list || "",
+  }));
+  return JSON.stringify(rows, null, 2);
+}
+function exportFileName() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, "0");
+  return `words-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}.json`;
+}
+document.getElementById("exportBtn").onclick = async () => {
+  if (!WORDS.length) { showAddMsg("내보낼 단어가 없습니다.", false); return; }
+  const text = buildExportJson();
+  const name = exportFileName();
+  if (window.boss?.exportJson) {                        // Electron: 저장 대화상자
+    const res = await window.boss.exportJson(text, name);
+    if (res && res.ok) showAddMsg(`${WORDS.length}개 단어 내보냄 ✓  ${res.path}`, true);
+    else if (res && res.canceled) showAddMsg("", true);
+    else showAddMsg("내보내기 실패: " + ((res && res.error) || "알 수 없음"), false);
+    return;
+  }
+  // 브라우저 폴백: 다운로드 링크
+  const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showAddMsg(`${WORDS.length}개 단어 내보냄 ✓  ${name}`, true);
+};
+
 /* 북마크 전체 해제 — 단어는 그대로 두고 북마크 표시만 모두 지움 (되돌릴 수 없으므로 확인) */
 document.getElementById("clearBmBtn").onclick = () => {
   const n = bookmarks.size;
