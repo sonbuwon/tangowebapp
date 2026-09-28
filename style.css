@@ -419,13 +419,25 @@ html, body {
 #clearBmBtn:hover { background: #4a2323; color: #ff8a8a; }
 #clearBmBtn:disabled { opacity: .45; cursor: default; }
 
-/* 개별 단어 추가 폼 */
+/* 개별 단어 추가: 접기/펼치기 토글 (제목 역할) */
+.section-toggle {
+  display: flex; align-items: center; gap: 8px;
+  max-width: 360px; margin: 18px auto 0; width: 100%;
+  padding: 14px 4px 6px; border: none; border-top: 1px solid var(--line);
+  background: transparent; cursor: pointer; text-align: left; font-family: inherit;
+}
+.section-toggle .toggle-arrow {
+  display: inline-block; width: 12px; color: var(--sub); font-size: .9rem;
+  transition: transform .15s;
+}
+.section-toggle[aria-expanded="true"] .toggle-arrow { transform: rotate(90deg); }
+.section-toggle:hover .indiv-title, .section-toggle:hover .toggle-arrow { color: var(--text); }
+.indiv-title { font-size: .84rem; font-weight: 700; color: var(--accent); }
+/* 개별 단어 추가 폼 (토글로 열렸을 때만 표시) */
 #indivForm {
   display: flex; flex-direction: column; gap: 12px;
-  max-width: 360px; margin: 18px auto 0;
-  padding-top: 16px; border-top: 1px solid var(--line);
+  max-width: 360px; margin: 6px auto 0;
 }
-.indiv-title { font-size: .84rem; font-weight: 700; color: var(--accent); }
 .field { display: flex; flex-direction: column; gap: 5px; }
 .field > span { font-size: .78rem; color: var(--accent); font-weight: 600; }
 .field em { color: #e06b6b; font-style: normal; }

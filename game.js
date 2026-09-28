@@ -535,6 +535,20 @@ document.getElementById("exportIndivBtn").onclick = () => {
 };
 updateIndivCount();
 
+/* ── 개별 단어 추가 항목 접기/펼치기 ──
+   제목 버튼을 누르면 폼을 숨기거나 보인다. 기본은 접힘, 마지막 상태를 localStorage 에 기억.
+   펼칠 때는 첫 입력칸(일본어 단어)에 포커스. */
+const INDIV_OPEN_KEY = "vocabIndivFormOpen";
+const indivToggle = document.getElementById("indivToggle");
+function setIndivOpen(open, focus) {
+  indivForm.style.display = open ? "" : "none";
+  indivToggle.setAttribute("aria-expanded", open ? "true" : "false");
+  localStorage.setItem(INDIV_OPEN_KEY, open ? "1" : "0");
+  if (open && focus) setTimeout(() => inWord.focus(), 0);
+}
+indivToggle.onclick = () => setIndivOpen(indivForm.style.display === "none", true);
+setIndivOpen(localStorage.getItem(INDIV_OPEN_KEY) === "1", false);
+
 /* ===== CSV 파일에서 가져오기 (일본어단어, 히라가나, 한국어뜻[, 예문일본어, 예문히라가나, 예문한국어]) ===== */
 const csvFile = document.getElementById("csvFile");
 const importBtn = document.getElementById("importBtn");
