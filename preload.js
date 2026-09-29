@@ -232,7 +232,7 @@ function clearAllWords() {
 // 렌더러(게임)에서 안전하게 호출할 수 있는 최소한의 다리
 contextBridge.exposeInMainWorld('boss', {
   hide: () => ipcRenderer.send('boss:hide'),
-  // 세로 꽉 채우기 토글 → Promise<boolean> (true=꽉 채움 상태)
+  // 세로 늘리기 단계 순환 → Promise<number> (0=기본, 1=좀 더 길게, 2=꽉 채움)
   fitHeight: () => ipcRenderer.invoke('boss:fitHeight'),
   // 전체 단어 JSON 내보내기 (저장 대화상자) → Promise<{ ok, path?, canceled?, error? }>
   exportJson: (text, defaultName) => ipcRenderer.invoke('boss:exportJson', text, defaultName),

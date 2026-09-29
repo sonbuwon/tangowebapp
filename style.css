@@ -43,6 +43,7 @@ html, body {
   cursor: pointer; font-size: 13px; line-height: 1;
 }
 #hideBtn:hover, #fitBtn:hover { background: var(--accent-soft); color: var(--text); }
+#fitBtn.half { color: var(--text); background: var(--accent-soft); }  /* 좀 더 길게 늘린 상태 */
 #fitBtn.on { color: var(--text); background: var(--accent-light); }   /* 꽉 채움 상태 */
 
 /* 화면 컨테이너 (단어장 / 리더) */

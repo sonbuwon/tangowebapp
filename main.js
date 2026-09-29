@@ -81,11 +81,28 @@ function createWindow() {
   });
 }
 
+// 창 + 내부 웹페이지까지 키보드 포커스를 확실히 가져옴
+// (다른 프로그램을 쓰다 돌아오면 창은 보여도 키 입력이 안 먹히는 문제 방지)
+function grabFocus() {
+  if (!win || win.isDestroyed() || !win.isVisible()) return;
+  win.setAlwaysOnTop(true, 'screen-saver'); // 최상단으로 끌어올림
+  win.moveTop();
+  win.focus();
+  win.webContents.focus();                   // 창만이 아니라 페이지(렌더러)에도 포커스
+}
+
 function show() {
   if (!win) return;
   win.show();          // 마지막 위치 그대로 복구 (모서리 배치는 최초 생성 시 1회만)
-  win.focus();
   visible = true;
+  grabFocus();
+  // Windows 가 포커스 이동을 막는 경우가 있어 잠깐 뒤에 몇 번 더 확인·재시도
+  [50, 150, 300].forEach((ms) => setTimeout(() => {
+    if (visible && win && !win.isDestroyed() && !(win.isFocused() && win.webContents.isFocused())) {
+      win.setAlwaysOnTop(false);               // 최상단 속성을 껐다 켜면 Windows 가 전면 전환을 허용
+      grabFocus();
+    }
+  }, ms));
 }
 
 function hide() {
@@ -98,28 +115,40 @@ function toggle() {
   visible ? hide() : show();
 }
 
-// ── 세로 꽉 채우기 토글 ──────────────────────────────────────────
-// 켜면 창이 있는 모니터의 작업 영역(작업표시줄 제외) 높이에 맞춰 위아래로 늘리고,
-// 다시 누르면 이전 크기·위치로 복구. 사용자가 직접 크기를 바꾸면 상태를 해제.
-let fitState = null;        // { x, y, width, height } 복구용 (null 이면 꺼짐)
+// ── 세로 늘리기 3단계 순환 ────────────────────────────────────────
+// 기본 → (1회) 좀 더 길게 → (2회) 작업 영역(작업표시줄 제외) 꽉 채우기 → (3회) 기본 크기·위치로 복구.
+// 사용자가 직접 크기를 바꾸면 상태를 해제.
+const FIT_MID_RATIO = 0.5;  // 1단계 높이: 기본 높이와 꽉 찬 높이 사이의 비율 (0.5 = 딱 중간)
+let fitState = null;        // { x, y, width, height } 기본 상태 복구용 (null 이면 꺼짐)
+let fitLevel = 0;           // 0 = 기본, 1 = 좀 더 길게, 2 = 꽉 채움
 let settingBounds = false;  // 우리가 setBounds 하는 동안 resize 이벤트 무시용
 function toggleFitHeight() {
-  if (!win) return false;
+  if (!win) return 0;
   settingBounds = true;
   try {
-    if (fitState) {
+    if (fitLevel === 2) {
       win.setBounds(fitState);
       fitState = null;
+      fitLevel = 0;
     } else {
       const cur = win.getBounds();
+      if (fitLevel === 0) fitState = cur;
       const { workArea } = screen.getDisplayMatching(cur);
-      fitState = cur;
-      win.setBounds({ x: cur.x, y: workArea.y, width: cur.width, height: workArea.height });
+      if (fitLevel === 0) {
+        const h = Math.round(cur.height + (workArea.height - cur.height) * FIT_MID_RATIO);
+        // 위쪽은 그대로 두고 아래로 늘리되, 작업 영역 밖으로 나가면 위로 밀어 올림
+        const y = Math.max(workArea.y, Math.min(cur.y, workArea.y + workArea.height - h));
+        win.setBounds({ x: cur.x, y, width: cur.width, height: h });
+        fitLevel = 1;
+      } else {
+        win.setBounds({ x: cur.x, y: workArea.y, width: cur.width, height: workArea.height });
+        fitLevel = 2;
+      }
     }
   } finally {
     settingBounds = false;
   }
-  return !!fitState;
+  return fitLevel;
 }
 
 // 화면 전환: 창을 띄우고 렌더러에 전환 신호 전송
@@ -168,7 +197,7 @@ app.whenReady().then(() => {
 
   // 렌더러(게임 화면)에서 Esc를 누르면 숨김 요청이 옴
   ipcMain.on('boss:hide', hide);
-  // 제목 표시줄 '세로 꽉 채우기' 버튼 → 토글 후 현재 상태(true=켜짐) 반환
+  // 제목 표시줄 '세로 늘리기' 버튼 → 다음 단계로 바꾼 뒤 현재 단계(0=기본, 1=좀 더 길게, 2=꽉 채움) 반환
   ipcMain.handle('boss:fitHeight', () => toggleFitHeight());
   // 전체 단어 JSON 내보내기: 저장 위치를 물어본 뒤 파일로 기록 → { ok, path } / { ok:false, canceled } / { ok:false, error }
   ipcMain.handle('boss:exportJson', async (_e, text, defaultName) => {
@@ -189,7 +218,8 @@ app.whenReady().then(() => {
   win.on('resize', () => {
     if (settingBounds || !fitState) return;
     fitState = null;
-    win.webContents.send('fitHeight', false);
+    fitLevel = 0;
+    win.webContents.send('fitHeight', 0);
   });
 });
 

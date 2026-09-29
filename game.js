@@ -363,9 +363,12 @@ document.addEventListener("keydown", e => {
 /* 상단 ✕ → 창 숨김 */
 document.getElementById("hideBtn").addEventListener("click", () => window.boss?.hide());
 
-/* 상단 ⇕ → 창을 위아래로 꽉 채우기 / 되돌리기 (Electron 메인에서 처리, 상태에 따라 버튼 강조) */
+/* 상단 ⇕ → 기본 → 좀 더 길게 → 꽉 채우기 → 기본 순환 (Electron 메인에서 처리, 단계에 따라 버튼 강조) */
 const fitBtn = document.getElementById("fitBtn");
-function setFitBtn(on) { fitBtn.classList.toggle("on", !!on); }
+function setFitBtn(level) {
+  fitBtn.classList.toggle("half", level === 1);
+  fitBtn.classList.toggle("on", level === 2);
+}
 fitBtn.addEventListener("click", async () => {
   if (!window.boss?.fitHeight) return;
   setFitBtn(await window.boss.fitHeight());
