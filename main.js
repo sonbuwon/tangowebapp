@@ -26,39 +26,21 @@ function startDisplay() {
   return targetDisplay || screen.getPrimaryDisplay();
 }
 
-// 모니터가 2개 이상이면 터미널(npm start 한 bash 창)에서 어느 화면에 띄울지 물어봄.
-// 패키징된 exe(터미널 없음)나 모니터 1개일 때는 묻지 않고 주 모니터 사용.
-function askDisplay() {
-  const displays = screen.getAllDisplays();
+// 모니터 선택은 start.js(npm start)가 터미널에서 물어본 뒤 --display-id=<id> 로 넘겨줌.
+// (Electron 프로세스는 Windows 콘솔에서 키보드 입력을 못 받는 경우가 있어 Node 스크립트에서 처리)
+// 인자가 없거나(패키징된 exe 등) 해당 모니터가 없으면 주 모니터 사용.
+function pickDisplayFromArgs() {
+  const arg = process.argv.find(a => a.startsWith('--display-id='));
+  if (!arg) return null;
+  const id = Number(arg.split('=')[1]);
+  return screen.getAllDisplays().find(d => d.id === id) || null;
+}
+
+// start.js 가 모니터 목록을 알아내기 위해 --list-displays 로 실행하면 JSON 한 줄만 출력하고 종료
+function printDisplays() {
   const primaryId = screen.getPrimaryDisplay().id;
-  if (app.isPackaged || displays.length < 2) return Promise.resolve(null);
-  // 왼쪽 → 오른쪽, 위 → 아래 순으로 번호 매김
-  const list = [...displays].sort((a, b) => a.bounds.x - b.bounds.x || a.bounds.y - b.bounds.y);
-  console.log(`\n모니터 ${list.length}개가 연결되어 있습니다. 어느 화면에서 열까요?`);
-  list.forEach((d, i) => {
-    const { width, height, x, y } = d.bounds;
-    console.log(`  ${i + 1}) ${width}x${height}  (위치 ${x},${y})${d.id === primaryId ? '  [주 모니터]' : ''}`);
-  });
-  const defIdx = list.findIndex(d => d.id === primaryId);
-  return new Promise((resolve) => {
-    const rl = require('readline').createInterface({ input: process.stdin, output: process.stdout });
-    let done = false;
-    const finish = (d) => { if (done) return; done = true; rl.close(); resolve(d); };
-    const ask = () => rl.question(`번호 입력 (1-${list.length}, 엔터 = ${defIdx + 1}): `, (ans) => {
-      const s = ans.trim();
-      if (!s) return finish(list[defIdx]);
-      const n = Number(s);
-      if (Number.isInteger(n) && n >= 1 && n <= list.length) return finish(list[n - 1]);
-      console.log('  잘못된 번호입니다. 다시 입력하세요.');
-      ask();
-    });
-    rl.on('close', () => finish(list[defIdx]));   // 입력 스트림이 없거나 닫히면 주 모니터
-    ask();
-  }).then((d) => {
-    const i = list.indexOf(d);
-    console.log(`→ ${i + 1}번 화면에서 엽니다.\n`);
-    return d;
-  });
+  const list = screen.getAllDisplays().map(d => ({ id: d.id, bounds: d.bounds, primary: d.id === primaryId }));
+  process.stdout.write('DISPLAYS:' + JSON.stringify(list) + '\n');
 }
 
 function cornerPosition() {
@@ -217,15 +199,20 @@ function buildTray() {
   tray.on('click', toggle); // 트레이 아이콘 클릭으로도 토글
 }
 
-app.whenReady().then(async () => {
-  targetDisplay = await askDisplay();
+app.whenReady().then(() => {
+  if (process.argv.includes('--list-displays')) {
+    printDisplays();
+    app.exit(0);
+    return;
+  }
+  targetDisplay = pickDisplayFromArgs();
   createWindow();
   buildTray();
 
   // 등록 실패(다른 앱이 선점) 시 경고 출력
   const reg = (key, fn) => {
     if (!globalShortcut.register(key, fn)) {
-      console.warn(`[gm6] 단축키 등록 실패: ${key} (다른 프로그램이 사용 중일 수 있음)`);
+      console.warn(`[gm6] Failed to register shortcut: ${key} (it may be in use by another program)`);
     }
   };
   reg(KEY_TOGGLE, toggle);
