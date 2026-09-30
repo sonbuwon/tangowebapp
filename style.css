@@ -569,6 +569,11 @@ html, body {
 .bm-btn:hover { color: var(--text); }
 .bm-btn.on { background: #4a3f1e; color: #ffd86b; border-color: #6b5a2a; }
 .fc-bm { position: absolute; top: 10px; right: 10px; z-index: 3; }
+/* 플래시카드 왼쪽 상단: 단어(히라가나) 읽어주기 버튼 / 펼침 칸 왼쪽 상단: 예문 읽어주기 버튼 */
+.fc-speak { position: absolute; top: 10px; left: 10px; right: auto; z-index: 3; font-size: .85rem; }
+.fc-speak-ex { top: 10px; left: 0; }
+.fc-speak.speaking { background: #1e3a4a; color: #6bd3ff; border-color: #2a5a6b; }
+.fc-speak:disabled { opacity: .35; cursor: default; }
 
 /* 빈 상태 */
 .empty-state { color: var(--sub); font-size: .85rem; text-align: center; padding: 30px 0; }
@@ -605,6 +610,7 @@ html, body {
 .fc-face .big-kana { font-size: 45px; font-weight: 600; }
 .fc-face .flip-hint { position: absolute; bottom: 14px; font-size: .72rem; color: var(--sub); }
 .fc-detail {
+  position: relative;
   display: none; margin-top: 14px; padding-top: 14px; width: 100%;
   border-top: 1px dashed var(--accent-light);
 }

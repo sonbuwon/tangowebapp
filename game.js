@@ -179,10 +179,18 @@ function showCard(keepReveal = true) {
     exJp.textContent = ""; exHira.textContent = ""; exKr.textContent = "";
     document.getElementById("fcProgress").textContent = "0 / 0";
     bm.style.display = "none";
+    fcSpeak.style.display = "none";
+    fcSpeakEx.style.display = "none";
+    stopSpeak();
     return;
   }
   bm.style.display = "flex";
+  fcSpeak.style.display = "flex";
+  fcSpeakEx.style.display = "flex";
   const w = deck[idx];
+  stopSpeak();                                   // 카드가 바뀌면 재생 중이던 음성 중단
+  fcSpeak.disabled = !wordText(w);               // 읽을 히라가나가 없으면 비활성
+  fcSpeakEx.disabled = !exText(w);               // 히라가나 예문이 없으면 비활성
   // 펼친 상태(히라가나·뜻 보임)는 다음/이전 카드로 넘겨도 유지. 덱을 새로 만들 때만(renderFlash) 접힘으로 초기화
   if (!keepReveal) fc.classList.remove("revealed");
   document.getElementById("fcKana").textContent = w.kanji || w.kana;  // 상단: 한자 우선
@@ -266,6 +274,49 @@ fcShowEx.onchange = () => {
 };
 document.getElementById("prevBtn").onclick = prev;   // 이전 카드
 document.getElementById("nextBtn").onclick = next;   // 다음 카드
+/* ===== 읽어주기 (Web Speech API, 일본어 음성) =====
+   앞면 🔊(S): 단어의 히라가나(kana) / 펼침 칸 🔊(D): 히라가나 예문(ex.hira) */
+const fcSpeak = document.getElementById("fcSpeak");       // 앞면 왼쪽 상단: 단어 읽기
+const fcSpeakEx = document.getElementById("fcSpeakEx");   // 펼침 칸 왼쪽 상단: 예문 읽기
+function wordText(w) { return ((w && w.kana) || "").trim(); }
+function exText(w) { return ((w && w.ex && w.ex.hira) || "").trim(); }
+function pickJaVoice() {
+  const voices = window.speechSynthesis ? speechSynthesis.getVoices() : [];
+  return voices.find(v => /^ja([-_]|$)/i.test(v.lang)) || null;
+}
+if (window.speechSynthesis) speechSynthesis.getVoices();   // 음성 목록 미리 로드 (첫 호출은 비어 있을 수 있음)
+let speakingBtn = null;                                    // 현재 재생 중인 버튼
+function stopSpeak() {
+  if (window.speechSynthesis && speechSynthesis.speaking) speechSynthesis.cancel();
+  fcSpeak.classList.remove("speaking");
+  fcSpeakEx.classList.remove("speaking");
+  speakingBtn = null;
+}
+function speakText(text, btn) {
+  if (!window.speechSynthesis) { alert("이 환경에서는 음성 읽기를 지원하지 않습니다."); return; }
+  if (!text) return;
+  const again = speechSynthesis.speaking && speakingBtn === btn;
+  stopSpeak();
+  if (again) return;                                       // 같은 버튼을 재생 중 다시 누르면 중단만
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "ja-JP";
+  const v = pickJaVoice();
+  if (v) u.voice = v;
+  u.rate = 0.9;
+  u.onstart = () => { speakingBtn = btn; btn.classList.add("speaking"); };
+  u.onend = u.onerror = () => { btn.classList.remove("speaking"); if (speakingBtn === btn) speakingBtn = null; };
+  speechSynthesis.speak(u);
+}
+function speakWord() { if (deck.length) speakText(wordText(deck[idx]), fcSpeak); }
+function speakEx() {
+  if (!deck.length) return;
+  // 예문은 펼친 상태에서만 읽기 (버튼도 펼쳤을 때만 보임)
+  if (!document.getElementById("flashcard").classList.contains("revealed")) return;
+  speakText(exText(deck[idx]), fcSpeakEx);
+}
+fcSpeak.onclick = (e) => { e.stopPropagation(); speakWord(); };
+fcSpeakEx.onclick = (e) => { e.stopPropagation(); speakEx(); };
+
 // 플래시카드 북마크 버튼
 document.getElementById("fcBookmark").onclick = (e) => {
   e.stopPropagation();
@@ -358,6 +409,8 @@ document.addEventListener("keydown", e => {
     fcShowEx.dispatchEvent(new Event("change"));
   }
   if (e.key === "b" || e.key === "B") document.getElementById("fcBookmark").click();
+  if (e.key === "s" || e.key === "S") speakWord();          // S → 단어(히라가나) 읽어주기
+  if (e.key === "d" || e.key === "D") speakEx();            // D → 예문(히라가나 문장) 읽어주기 (펼친 상태)
   if (e.ctrlKey && (e.key === "q" || e.key === "Q")) { e.preventDefault(); shuffleDeck(); }  // Ctrl+Q → 섞기
 });
 

@@ -78,11 +78,15 @@
           <!-- 앞면(일본어)만 보이다가 클릭 시 같은 카드 안에 히라가나·뜻이 펼쳐짐 -->
           <div class="flashcard" id="flashcard">
             <div class="fc-face">
+              <!-- 왼쪽 상단: 단어(히라가나) 읽어주기 (S 키) -->
+              <button class="bm-btn fc-speak" id="fcSpeak" title="단어 읽어주기 (S)">🔊</button>
               <button class="bm-btn fc-bm" id="fcBookmark" title="북마크">☆</button>
               <div class="big-kana" id="fcKana"></div>
               <!-- 예문(일본어 문장): '예문 보기' 체크 시 첫 화면부터 표시 -->
               <div class="fc-ex fc-ex-jp" id="fcExJp"></div>
               <div class="fc-detail">
+                <!-- 펼침 칸 왼쪽 상단: 예문(히라가나 문장) 읽어주기 (D 키) -->
+                <button class="bm-btn fc-speak fc-speak-ex" id="fcSpeakEx" title="예문 읽어주기 (D)">🔊</button>
                 <div class="big-kanji" id="fcKanji"></div>
                 <div class="big-mean" id="fcMean"></div>
                 <!-- 예문(히라가나 문장 / 한국어 해석): 펼침 + '예문 보기' 체크 시 표시 -->
