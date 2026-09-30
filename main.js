@@ -20,9 +20,49 @@ const KEY_INPUT  = 'Alt+5';           // 단어 입력 화면으로 전환
 let win = null;
 let tray = null;
 let visible = false;
+let targetDisplay = null;   // 창을 띄울 모니터 (시작 시 선택, 기본은 주 모니터)
+
+function startDisplay() {
+  return targetDisplay || screen.getPrimaryDisplay();
+}
+
+// 모니터가 2개 이상이면 터미널(npm start 한 bash 창)에서 어느 화면에 띄울지 물어봄.
+// 패키징된 exe(터미널 없음)나 모니터 1개일 때는 묻지 않고 주 모니터 사용.
+function askDisplay() {
+  const displays = screen.getAllDisplays();
+  const primaryId = screen.getPrimaryDisplay().id;
+  if (app.isPackaged || displays.length < 2) return Promise.resolve(null);
+  // 왼쪽 → 오른쪽, 위 → 아래 순으로 번호 매김
+  const list = [...displays].sort((a, b) => a.bounds.x - b.bounds.x || a.bounds.y - b.bounds.y);
+  console.log(`\n모니터 ${list.length}개가 연결되어 있습니다. 어느 화면에서 열까요?`);
+  list.forEach((d, i) => {
+    const { width, height, x, y } = d.bounds;
+    console.log(`  ${i + 1}) ${width}x${height}  (위치 ${x},${y})${d.id === primaryId ? '  [주 모니터]' : ''}`);
+  });
+  const defIdx = list.findIndex(d => d.id === primaryId);
+  return new Promise((resolve) => {
+    const rl = require('readline').createInterface({ input: process.stdin, output: process.stdout });
+    let done = false;
+    const finish = (d) => { if (done) return; done = true; rl.close(); resolve(d); };
+    const ask = () => rl.question(`번호 입력 (1-${list.length}, 엔터 = ${defIdx + 1}): `, (ans) => {
+      const s = ans.trim();
+      if (!s) return finish(list[defIdx]);
+      const n = Number(s);
+      if (Number.isInteger(n) && n >= 1 && n <= list.length) return finish(list[n - 1]);
+      console.log('  잘못된 번호입니다. 다시 입력하세요.');
+      ask();
+    });
+    rl.on('close', () => finish(list[defIdx]));   // 입력 스트림이 없거나 닫히면 주 모니터
+    ask();
+  }).then((d) => {
+    const i = list.indexOf(d);
+    console.log(`→ ${i + 1}번 화면에서 엽니다.\n`);
+    return d;
+  });
+}
 
 function cornerPosition() {
-  const { workArea } = screen.getPrimaryDisplay(); // 작업표시줄 제외 영역
+  const { workArea } = startDisplay(); // 작업표시줄 제외 영역
   const right = workArea.x + workArea.width - WIN_W - MARGIN;
   const left = workArea.x + MARGIN;
   const bottom = workArea.y + workArea.height - WIN_H - MARGIN;
@@ -35,9 +75,9 @@ function cornerPosition() {
   }
 }
 
-// 주 모니터 중앙 좌표 (작업표시줄 제외 영역 기준, 화면 밖으로 나가지 않게 보정)
+// 선택한 모니터(기본: 주 모니터) 중앙 좌표 (작업표시줄 제외 영역 기준, 화면 밖으로 나가지 않게 보정)
 function centerPosition() {
-  const { workArea } = screen.getPrimaryDisplay();
+  const { workArea } = startDisplay();
   return {
     x: Math.max(workArea.x, Math.round(workArea.x + (workArea.width - WIN_W) / 2)),
     y: Math.max(workArea.y, Math.round(workArea.y + (workArea.height - WIN_H) / 2)),
@@ -177,7 +217,8 @@ function buildTray() {
   tray.on('click', toggle); // 트레이 아이콘 클릭으로도 토글
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  targetDisplay = await askDisplay();
   createWindow();
   buildTray();
 

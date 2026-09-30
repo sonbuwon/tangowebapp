@@ -162,9 +162,9 @@ let idx = 0;
 function buildDeck() { deck = filteredWords(); idx = 0; }
 function renderFlash() {
   buildDeck();
-  showCard();
+  showCard(false);
 }
-function showCard() {
+function showCard(keepReveal = true) {
   const fc = document.getElementById("flashcard");
   const bm = document.getElementById("fcBookmark");
   const exJp = document.getElementById("fcExJp");
@@ -183,7 +183,8 @@ function showCard() {
   }
   bm.style.display = "flex";
   const w = deck[idx];
-  fc.classList.remove("revealed");                                    // 새 카드는 일본어만 보이는 상태로
+  // 펼친 상태(히라가나·뜻 보임)는 다음/이전 카드로 넘겨도 유지. 덱을 새로 만들 때만(renderFlash) 접힘으로 초기화
+  if (!keepReveal) fc.classList.remove("revealed");
   document.getElementById("fcKana").textContent = w.kanji || w.kana;  // 상단: 한자 우선
   document.getElementById("fcKanji").textContent = w.kana;            // 펼침: 히라가나 읽는 법
   document.getElementById("fcMean").textContent = w.mean;
