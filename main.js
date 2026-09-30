@@ -136,8 +136,8 @@ function toggleFitHeight() {
       const { workArea } = screen.getDisplayMatching(cur);
       if (fitLevel === 0) {
         const h = Math.round(cur.height + (workArea.height - cur.height) * FIT_MID_RATIO);
-        // 위쪽은 그대로 두고 아래로 늘리되, 작업 영역 밖으로 나가면 위로 밀어 올림
-        const y = Math.max(workArea.y, Math.min(cur.y, workArea.y + workArea.height - h));
+        // 가로 위치는 그대로, 세로는 작업 영역 중앙에 맞춰 위아래로 늘림
+        const y = Math.max(workArea.y, Math.round(workArea.y + (workArea.height - h) / 2));
         win.setBounds({ x: cur.x, y, width: cur.width, height: h });
         fitLevel = 1;
       } else {
