@@ -111,9 +111,28 @@
     </div>
   </div>
 
-  <!-- ===== 단어 입력 화면 (Alt+5) ===== -->
+  <!-- ===== 설정 메뉴 화면 (Alt+5) — '단어 관련' / '설정' 2계층 ===== -->
+  <div id="settingsMenuScreen" class="screen" style="display:none">
+    <div class="settings-wrap">
+      <button type="button" class="menu-btn" id="menuWordBtn">단어 관련</button>
+      <button type="button" class="menu-btn" id="menuSettingsBtn">설정</button>
+    </div>
+  </div>
+
+  <!-- ===== 설정 화면 (설정 메뉴 → 설정) ===== -->
+  <div id="appSettingsScreen" class="screen" style="display:none">
+    <div class="settings-wrap">
+      <button type="button" class="back-btn" data-back="settings">← 뒤로</button>
+      <label class="setting-row"><input type="checkbox" id="optSpeech" /> 음성 기능 <span class="setting-desc">플래시카드 🔊 읽어주기 버튼 (S·D 키)</span></label>
+      <button type="button" id="settingsSaveBtn">저장</button>
+      <div id="settingsMsg"></div>
+    </div>
+  </div>
+
+  <!-- ===== 단어 입력 화면 (설정 메뉴 → 단어 관련) ===== -->
   <div id="inputScreen" class="screen" style="display:none">
     <div id="inputWrap">
+      <button type="button" class="back-btn" data-back="settings">← 뒤로</button>
       <!-- 단어 추가는 CSV 가져오기로만 (개별 입력 폼 제거) -->
       <input type="file" id="csvFile" accept=".csv,text/csv" style="display:none" />
       <button type="button" id="importBtn">CSV 파일에서 추가</button>
@@ -270,7 +289,7 @@
         <div class="sc-row"><span class="sc-key">Alt + 2</span>단어장</div>
         <div class="sc-row"><span class="sc-key">Alt + 3</span>플래시카드</div>
         <div class="sc-row"><span class="sc-key">Alt + 4</span>시험</div>
-        <div class="sc-row"><span class="sc-key">Alt + 5</span>단어 입력</div>
+        <div class="sc-row"><span class="sc-key">Alt + 5</span>설정</div>
       </div>
       <div class="sc-group">
         <span class="sc-glabel">플래시카드</span>
@@ -278,6 +297,8 @@
         <div class="sc-row"><span class="sc-key">↑</span>뜻 보기/숨기기</div>
         <div class="sc-row"><span class="sc-key">↓</span>예문 보기 설정/해제</div>
         <div class="sc-row"><span class="sc-key">B</span>북마크</div>
+        <div class="sc-row"><span class="sc-key">S</span>단어 읽어주기 (음성 기능)</div>
+        <div class="sc-row"><span class="sc-key">D</span>예문 읽어주기 (펼친 상태, 음성 기능)</div>
         <div class="sc-row"><span class="sc-key">Ctrl + Q</span>섞기</div>
         <div class="sc-row"><span class="sc-key">Esc</span>창 숨기기</div>
       </div>

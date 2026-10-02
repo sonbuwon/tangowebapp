@@ -14,7 +14,7 @@ const KEY_HOME   = 'Alt+1';           // 홈(리스트) 화면으로 전환
 const KEY_VOCAB  = 'Alt+2';           // 단어장(목록) 화면으로 전환
 const KEY_FLASH  = 'Alt+3';           // 플래시카드 모드로 전환
 const KEY_QUIZ   = 'Alt+4';           // 시험 화면으로 전환
-const KEY_INPUT  = 'Alt+5';           // 단어 입력 화면으로 전환
+const KEY_INPUT  = 'Alt+5';           // 설정 메뉴 화면으로 전환 (단어 관련 / 설정)
 // ───────────────────────────────────────────────────────────────
 
 let win = null;
@@ -191,7 +191,7 @@ function buildTray() {
     { label: `단어장  (${KEY_VOCAB})`, click: () => switchView('vocab') },
     { label: `플래시카드  (${KEY_FLASH})`, click: () => switchView('flash') },
     { label: `시험  (${KEY_QUIZ})`, click: () => switchView('quiz') },
-    { label: `단어 입력  (${KEY_INPUT})`, click: () => switchView('input') },
+    { label: `설정  (${KEY_INPUT})`, click: () => switchView('settings') },
     { type: 'separator' },
     { label: '종료', click: () => { app.isQuiting = true; app.quit(); } },
   ]);
@@ -220,7 +220,7 @@ app.whenReady().then(() => {
   reg(KEY_HOME, () => switchView('home'));
   reg(KEY_VOCAB, () => switchView('vocab'));
   reg(KEY_FLASH, () => switchView('flash'));
-  reg(KEY_INPUT, () => switchView('input'));
+  reg(KEY_INPUT, () => switchView('settings'));
   reg(KEY_QUIZ, () => switchView('quiz'));
 
   // 렌더러(게임 화면)에서 Esc를 누르면 숨김 요청이 옴

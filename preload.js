@@ -238,7 +238,7 @@ contextBridge.exposeInMainWorld('boss', {
   exportJson: (text, defaultName) => ipcRenderer.invoke('boss:exportJson', text, defaultName),
   // 메인에서 꽉 채움 상태가 바뀌었을 때(사용자가 직접 크기 조절 등) 알림
   onFitHeight: (cb) => ipcRenderer.on('fitHeight', (_e, on) => cb(on)),
-  // 메인 프로세스가 보낸 화면 전환 신호 ('vocab' | 'input' | 'sentences')
+  // 메인 프로세스가 보낸 화면 전환 신호 ('home' | 'vocab' | 'flash' | 'quiz' | 'settings')
   onView: (cb) => ipcRenderer.on('view', (_e, v) => cb(v)),
   // words.csv 에서 읽어온 단어 목록
   words: loadWords(),

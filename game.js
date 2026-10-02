@@ -185,8 +185,9 @@ function showCard(keepReveal = true) {
     return;
   }
   bm.style.display = "flex";
-  fcSpeak.style.display = "flex";
-  fcSpeakEx.style.display = "flex";
+  // 설정 '음성 기능' 이 꺼져 있으면 읽어주기 버튼 숨김
+  fcSpeak.style.display = speechOn ? "flex" : "none";
+  fcSpeakEx.style.display = speechOn ? "flex" : "none";
   const w = deck[idx];
   stopSpeak();                                   // 카드가 바뀌면 재생 중이던 음성 중단
   fcSpeak.disabled = !wordText(w);               // 읽을 히라가나가 없으면 비활성
@@ -278,6 +279,9 @@ document.getElementById("nextBtn").onclick = next;   // 다음 카드
    앞면 🔊(S): 단어의 히라가나(kana) / 펼침 칸 🔊(D): 히라가나 예문(ex.hira) */
 const fcSpeak = document.getElementById("fcSpeak");       // 앞면 왼쪽 상단: 단어 읽기
 const fcSpeakEx = document.getElementById("fcSpeakEx");   // 펼침 칸 왼쪽 상단: 예문 읽기
+// 설정 화면의 '음성 기능' (localStorage 저장, 기본 켜짐)
+const SPEECH_KEY = "vocabSpeechOn";
+let speechOn = localStorage.getItem(SPEECH_KEY) !== "0";
 function wordText(w) { return ((w && w.kana) || "").trim(); }
 function exText(w) { return ((w && w.ex && w.ex.hira) || "").trim(); }
 function pickJaVoice() {
@@ -307,9 +311,9 @@ function speakText(text, btn) {
   u.onend = u.onerror = () => { btn.classList.remove("speaking"); if (speakingBtn === btn) speakingBtn = null; };
   speechSynthesis.speak(u);
 }
-function speakWord() { if (deck.length) speakText(wordText(deck[idx]), fcSpeak); }
+function speakWord() { if (speechOn && deck.length) speakText(wordText(deck[idx]), fcSpeak); }
 function speakEx() {
-  if (!deck.length) return;
+  if (!speechOn || !deck.length) return;
   // 예문은 펼친 상태에서만 읽기 (버튼도 펼쳤을 때만 보임)
   if (!document.getElementById("flashcard").classList.contains("revealed")) return;
   speakText(exText(deck[idx]), fcSpeakEx);
@@ -380,7 +384,7 @@ document.addEventListener("keydown", e => {
   // Alt+1~5 → 화면 전환 (전역 단축키가 막혀도 창이 떠 있으면 동작)
   if (e.altKey && ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5"].includes(e.code)) {
     e.preventDefault();
-    setView({ Digit1: "home", Digit2: "vocab", Digit3: "flash", Digit4: "quiz", Digit5: "input" }[e.code]);
+    setView({ Digit1: "home", Digit2: "vocab", Digit3: "flash", Digit4: "quiz", Digit5: "settings" }[e.code]);
     return;
   }
   // 무한 테스트 진행 중: 1~4 보기 선택, Enter 다음 문제, B 북마크 토글
@@ -1465,17 +1469,39 @@ quizInfBackBtn.onclick = () => {                           // 구간 변경 → 
 };
 document.getElementById("quizInfEndBtn").onclick = showQuizPicker;   // 시험 종료 → 시험 홈(종류·범위 선택)
 
-/* ===== 화면 전환 (1 홈 / 2 단어장 / 3 플래시카드 / 4 시험 / 5 단어 입력) =====
+/* ===== 설정 메뉴 (Alt+5) → '단어 관련'(단어 입력 화면) / '설정'(앱 설정 화면) ===== */
+document.getElementById("menuWordBtn").onclick = () => setView("input");
+document.getElementById("menuSettingsBtn").onclick = () => setView("appSettings");
+document.querySelectorAll(".back-btn[data-back]").forEach(b => { b.onclick = () => setView(b.dataset.back); });
+const optSpeech = document.getElementById("optSpeech");
+const settingsMsg = document.getElementById("settingsMsg");
+// 설정 화면 열 때: 저장된 값으로 체크 상태 복원 (저장 안 한 변경은 버림)
+function loadSettingsForm() {
+  optSpeech.checked = speechOn;
+  settingsMsg.textContent = "";
+}
+optSpeech.onchange = () => { settingsMsg.textContent = ""; };
+document.getElementById("settingsSaveBtn").onclick = () => {
+  speechOn = optSpeech.checked;
+  localStorage.setItem(SPEECH_KEY, speechOn ? "1" : "0");
+  if (!speechOn) stopSpeak();
+  settingsMsg.textContent = "저장되었습니다 ✓";
+};
+
+/* ===== 화면 전환 (1 홈 / 2 단어장 / 3 플래시카드 / 4 시험 / 5 설정 메뉴) =====
    vocab·flash 는 같은 단어장 화면을 쓰되 flash 는 플래시카드 모드로 진입 */
-const SCREENS = { home: "homeScreen", vocab: "vocabScreen", flash: "vocabScreen", input: "inputScreen", quiz: "quizScreen" };
-const TITLES  = { home: "홈", vocab: "単語", flash: "単語", input: "単語追加", quiz: "試験" };
-const ALL_SCREENS = ["homeScreen", "vocabScreen", "inputScreen", "quizScreen"];
+const SCREENS = {
+  home: "homeScreen", vocab: "vocabScreen", flash: "vocabScreen", quiz: "quizScreen",
+  settings: "settingsMenuScreen", input: "inputScreen", appSettings: "appSettingsScreen",
+};
+const TITLES  = { home: "홈", vocab: "単語", flash: "単語", quiz: "試験", settings: "設定", input: "単語追加", appSettings: "設定" };
+const ALL_SCREENS = ["homeScreen", "vocabScreen", "quizScreen", "settingsMenuScreen", "inputScreen", "appSettingsScreen"];
 let curView = "home";
 function setView(view) {
   if (!SCREENS[view]) return;
   const screenId = SCREENS[view];
   // 키보드 가드용 (플래시카드 조작키는 curView === "vocab" 일 때만)
-  curView = (view === "input" || view === "home" || view === "quiz") ? view : "vocab";
+  curView = (view === "vocab" || view === "flash") ? "vocab" : view;
   ALL_SCREENS.forEach(id => {
     document.getElementById(id).style.display = (id === screenId) ? "flex" : "none";
   });
@@ -1492,6 +1518,7 @@ function setView(view) {
   else if (view === "flash") setMode("flash");             // 플래시카드 모드로 전환
   else if (view === "vocab") setMode("list");              // 목록 모드로 전환
   else if (view === "quiz") showQuizPicker();              // 시험 범위 선택부터
+  else if (view === "appSettings") loadSettingsForm();     // 저장된 설정값 표시
 }
 window.boss?.onView(setView);
 
