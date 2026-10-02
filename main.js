@@ -138,10 +138,10 @@ function toggle() {
 }
 
 // ── 세로 늘리기 3단계 순환 ────────────────────────────────────────
-// 기본 → (1회) 좀 더 길게 → (2회) 작업 영역(작업표시줄 제외) 꽉 채우기 → (3회) 기본 크기·위치로 복구.
+// 기본 → (1회) 좀 더 길게 → (2회) 작업 영역(작업표시줄 제외) 꽉 채우기 → (3회) 그 자리에서 기본 크기로 복구.
 // 사용자가 직접 크기를 바꾸면 상태를 해제.
 const FIT_MID_RATIO = 0.5;  // 1단계 높이: 기본 높이와 꽉 찬 높이 사이의 비율 (0.5 = 딱 중간)
-let fitState = null;        // { x, y, width, height } 기본 상태 복구용 (null 이면 꺼짐)
+let fitState = null;        // { x, y, width, height } 기본 크기 복구용 (null 이면 꺼짐)
 let fitLevel = 0;           // 0 = 기본, 1 = 좀 더 길게, 2 = 꽉 채움
 let settingBounds = false;  // 우리가 setBounds 하는 동안 resize 이벤트 무시용
 function toggleFitHeight() {
@@ -149,7 +149,9 @@ function toggleFitHeight() {
   settingBounds = true;
   try {
     if (fitLevel === 2) {
-      win.setBounds(fitState);
+      // 위치는 지금 자리(왼쪽·위 모서리) 그대로, 크기만 기본(늘리기 전) 크기로 복구
+      const cur = win.getBounds();
+      win.setBounds({ x: cur.x, y: cur.y, width: fitState.width, height: fitState.height });
       fitState = null;
       fitLevel = 0;
     } else {
