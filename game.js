@@ -862,6 +862,7 @@ let quizDeck = [];
 let quizIdx = 0;
 let quizAnswered = false;
 let quizScore = 0;
+let quizWrong = [];                                        // 이번 시험에서 틀린 단어 (완료 화면 표에 사용)
 
 // 카타카나 → 히라가나, 공백 제거 (입력 비교용 정규화)
 function normalizeKana(s) {
@@ -944,7 +945,7 @@ function startInputQuiz() {
   quizRange.style.display = "none";
   quizWrap.style.display = "flex";
   quizScope.textContent = `${rangeLabel}  ·  ${lo + 1}~${hi + 1}번 (${deck.length}개)  ·  ${quizOrder === "random" ? "랜덤" : "순서대로"}`;
-  quizIdx = 0; quizScore = 0;
+  quizIdx = 0; quizScore = 0; quizWrong = [];
   quizEmpty.style.display = "none";
   quizProgress.style.display = "";
   document.querySelector(".quiz-card").style.display = "";
@@ -1003,6 +1004,7 @@ quizForm.addEventListener("submit", (e) => {
     quizBookmark.disabled = false;
     quizBookmark.style.display = "";
   } else {
+    quizWrong.push(w);
     // 오답 → 북마크에 추가 (이미 있으면 유지)
     const already = isBookmarked(w);
     if (!already) {
@@ -1016,6 +1018,18 @@ quizForm.addEventListener("submit", (e) => {
     quizResult.appendChild(answerLine);
     quizResult.className = "err";
   }
+  // 맞든 틀리든 예문(일본어 문장 / 히라가나 문장 / 한국어 해석) 표시
+  const ex = w.ex || {};
+  const exBox = document.createElement("div");
+  exBox.className = "quiz-ex";
+  [["quiz-ex-jp", ex.jp], ["quiz-ex-hira", ex.hira], ["quiz-ex-kr", ex.kr]].forEach(([cls, text]) => {
+    if (!text) return;
+    const line = document.createElement("div");
+    line.className = cls;
+    line.textContent = text;
+    exBox.appendChild(line);
+  });
+  if (exBox.childElementCount) quizResult.appendChild(exBox);
   quizProgress.textContent = `${quizIdx + 1} / ${quizDeck.length}  ·  정답 ${quizScore}`;
   quizNext.style.display = "";
   setTimeout(() => quizNext.focus(), 0);
@@ -1029,6 +1043,26 @@ function goNextQuiz() {
     quizMean.style.visibility = "hidden";
     quizResult.textContent = "'범위 변경'을 눌러 다시 시작할 수 있습니다.";
     quizResult.className = "";
+    // 틀린 단어 표: 일본어 단어 / 히라가나 / 한국어 뜻
+    if (quizWrong.length) {
+      const title = document.createElement("div");
+      title.className = "quiz-wrong-title";
+      title.textContent = `틀린 단어 (${quizWrong.length}개)`;
+      const table = document.createElement("table");
+      table.className = "quiz-wrong-table";
+      const head = table.createTHead().insertRow();
+      ["일본어 단어", "히라가나", "한국어 뜻"].forEach(t => {
+        const th = document.createElement("th");
+        th.textContent = t;
+        head.appendChild(th);
+      });
+      const body = table.createTBody();
+      quizWrong.forEach(w => {
+        const row = body.insertRow();
+        [w.kanji || w.kana, w.kana, w.mean || ""].forEach(t => { row.insertCell().textContent = t; });
+      });
+      quizResult.append(title, table);
+    }
     quizForm.style.display = "none";
     quizNext.style.display = "none";
     quizBookmark.style.display = "none";

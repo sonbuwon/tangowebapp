@@ -115,6 +115,20 @@ html, body {
 #quizResult.ok, #quizInfResult.ok { color: #7fcf9a; }
 #quizResult.err, #quizInfResult.err { color: #e06b6b; }
 #quizResult .quiz-answer { font-size: 2em; margin-top: 4px; }
+#quizResult .quiz-ex { margin-top: 10px; font-size: .95rem; font-weight: 600; line-height: 1.5; word-break: keep-all; }
+#quizResult .quiz-ex-jp { color: var(--text); }
+#quizResult .quiz-ex-hira { margin-top: 4px; color: var(--accent); }
+#quizResult .quiz-ex-kr { margin-top: 4px; color: var(--sub); }
+/* 완료 화면: 틀린 단어 표 */
+#quizResult .quiz-wrong-title { margin-top: 16px; color: #e06b6b; }
+#quizResult .quiz-wrong-table {
+  margin-top: 8px; width: 100%; border-collapse: collapse;
+  font-size: 1.3em; font-weight: 600; text-align: left; color: var(--text);
+}
+#quizResult .quiz-wrong-table th,
+#quizResult .quiz-wrong-table td { padding: 6px 8px; border-bottom: 1px solid var(--sub); word-break: keep-all; }
+#quizResult .quiz-wrong-table th { color: var(--sub); font-size: 1.04rem; }
+#quizResult .quiz-wrong-table td:nth-child(2) { color: var(--accent); }
 #quizInfResult .quiz-detail { font-size: .78rem; font-weight: 600; margin-top: 4px; color: var(--sub); }
 #quizNext, #quizInfNext {
   margin-top: 12px; padding: 8px 22px;
