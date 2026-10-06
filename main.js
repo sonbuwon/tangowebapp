@@ -1,4 +1,4 @@
-const { app, BrowserWindow, globalShortcut, Tray, Menu, ipcMain, screen, dialog } = require('electron');
+const { app, BrowserWindow, globalShortcut, Tray, Menu, ipcMain, screen, dialog, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -16,6 +16,20 @@ const KEY_FLASH  = 'Alt+3';           // 플래시카드 모드로 전환
 const KEY_QUIZ   = 'Alt+4';           // 시험 화면으로 전환
 const KEY_INPUT  = 'Alt+5';           // 설정 메뉴 화면으로 전환 (단어 관련 / 설정)
 // ───────────────────────────────────────────────────────────────
+
+// 구글 음성 요청 1회당 글자 수 제한(약 200자) → 문장부호 기준으로 나눔
+const TTS_MAX = 180;
+function splitTtsText(text) {
+  const out = [];
+  let cur = '';
+  for (const piece of text.trim().split(/(?<=[。、！？!?\s])/)) {
+    if ((cur + piece).length > TTS_MAX && cur) { out.push(cur); cur = ''; }
+    cur += piece;
+    while (cur.length > TTS_MAX) { out.push(cur.slice(0, TTS_MAX)); cur = cur.slice(TTS_MAX); }
+  }
+  if (cur.trim()) out.push(cur);
+  return out;
+}
 
 let win = null;
 let tray = null;
@@ -242,6 +256,24 @@ app.whenReady().then(() => {
       return { ok: true, path: filePath };
     } catch (e) {
       return { ok: false, error: e.message };
+    }
+  });
+  // 구글 음성(온라인): 구글 번역 '듣기' 음성을 받아 MP3 바이트로 반환 → Uint8Array / 실패 시 null
+  // (비공식 주소라 막히거나 바뀔 수 있음 → 렌더러에서 윈도우 음성으로 대체)
+  ipcMain.handle('boss:tts', async (_e, text) => {
+    try {
+      const parts = splitTtsText(String(text || ''));
+      if (!parts.length) return null;
+      const bufs = [];
+      for (const q of parts) {
+        const url = 'https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=ja&q=' + encodeURIComponent(q);
+        const res = await net.fetch(url, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) return null;
+        bufs.push(Buffer.from(await res.arrayBuffer()));
+      }
+      return Buffer.concat(bufs);                // MP3 조각은 이어 붙여도 그대로 재생됨
+    } catch (_) {
+      return null;
     }
   });
   // 사용자가 직접 크기를 바꾸면 꽉 채움 상태 해제 (버튼 표시도 갱신)

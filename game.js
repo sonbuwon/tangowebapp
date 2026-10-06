@@ -90,13 +90,27 @@ function pruneBookmarks() {
 pruneBookmarks();
 updateBmCount();
 
+/* 같은 단어(kana+kanji)가 여러 주제에 있으면 처음 것만 남김
+   (북마크는 단어 기준으로 저장되므로 북마크 목록에서 주제 수만큼 중복되지 않게) */
+function uniqueWords(list) {
+  const seen = new Set();
+  return list.filter(w => {
+    const k = wordKey(w);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+function bookmarkedWords() { return uniqueWords(WORDS.filter(isBookmarked)); }
+
 /* 행 / 북마크 / 리스트 필터 적용 */
 function filteredWords() {
-  return WORDS.filter(w =>
+  const list = WORDS.filter(w =>
     (curRow === "all" || w.row === curRow) &&
     (!bookmarkOnly || isBookmarked(w)) &&
     (currentList === null || (w.list || "") === currentList)
   );
+  return bookmarkOnly ? uniqueWords(list) : list;
 }
 
 /* ===== 목록 모드 ===== */
@@ -284,32 +298,77 @@ const SPEECH_KEY = "vocabSpeechOn";
 let speechOn = localStorage.getItem(SPEECH_KEY) !== "0";
 function wordText(w) { return ((w && w.kana) || "").trim(); }
 function exText(w) { return ((w && w.ex && w.ex.hira) || "").trim(); }
-function pickJaVoice() {
+// 음성 종류: 'google'(구글 번역 음성, 온라인) | 'windows'(윈도우 설치 음성). 윈도우 음성은 이름으로 저장
+const TTS_ENGINE_KEY = "vocabTtsEngine";
+const TTS_VOICE_KEY = "vocabTtsVoice";
+let ttsEngine = localStorage.getItem(TTS_ENGINE_KEY) || "google";
+let ttsVoice = localStorage.getItem(TTS_VOICE_KEY) || "";
+function jaVoices() {
   const voices = window.speechSynthesis ? speechSynthesis.getVoices() : [];
-  return voices.find(v => /^ja([-_]|$)/i.test(v.lang)) || null;
+  return voices.filter(v => /^ja([-_]|$)/i.test(v.lang));
+}
+function pickJaVoice() {
+  const list = jaVoices();
+  return list.find(v => v.name === ttsVoice) || list[0] || null;
 }
 if (window.speechSynthesis) speechSynthesis.getVoices();   // 음성 목록 미리 로드 (첫 호출은 비어 있을 수 있음)
 let speakingBtn = null;                                    // 현재 재생 중인 버튼
+let ttsAudio = null;                                       // 구글 음성 재생용 <audio>
+let ttsToken = 0;                                          // 구글 음성 응답이 늦게 와도 중단/교체된 요청은 무시
 function stopSpeak() {
-  if (window.speechSynthesis && speechSynthesis.speaking) speechSynthesis.cancel();
+  ttsToken++;
+  if (window.speechSynthesis && (speechSynthesis.speaking || speechSynthesis.pending)) speechSynthesis.cancel();
+  if (ttsAudio) {
+    ttsAudio.pause();
+    URL.revokeObjectURL(ttsAudio.src);
+    ttsAudio = null;
+  }
   fcSpeak.classList.remove("speaking");
   fcSpeakEx.classList.remove("speaking");
   speakingBtn = null;
 }
-function speakText(text, btn) {
-  if (!window.speechSynthesis) { alert("이 환경에서는 음성 읽기를 지원하지 않습니다."); return; }
-  if (!text) return;
-  const again = speechSynthesis.speaking && speakingBtn === btn;
-  stopSpeak();
-  if (again) return;                                       // 같은 버튼을 재생 중 다시 누르면 중단만
+function endSpeak(btn) { btn.classList.remove("speaking"); if (speakingBtn === btn) speakingBtn = null; }
+// 윈도우 음성으로 읽기
+function speakWindows(text, btn) {
+  if (!window.speechSynthesis) { endSpeak(btn); alert("이 환경에서는 음성 읽기를 지원하지 않습니다."); return; }
   const u = new SpeechSynthesisUtterance(text);
   u.lang = "ja-JP";
   const v = pickJaVoice();
   if (v) u.voice = v;
   u.rate = 0.9;
   u.onstart = () => { speakingBtn = btn; btn.classList.add("speaking"); };
-  u.onend = u.onerror = () => { btn.classList.remove("speaking"); if (speakingBtn === btn) speakingBtn = null; };
+  u.onend = u.onerror = () => endSpeak(btn);
   speechSynthesis.speak(u);
+}
+// 구글 음성으로 읽기 (받아오기 실패·재생 실패 시 윈도우 음성으로 대체)
+async function speakGoogle(text, btn) {
+  const token = ++ttsToken;
+  speakingBtn = btn; btn.classList.add("speaking");        // 받아오는 동안에도 재생 중 표시
+  let bytes = null;
+  try { bytes = window.boss && window.boss.tts ? await window.boss.tts(text) : null; } catch (_) {}
+  if (token !== ttsToken) return;                          // 그 사이 중단/다른 재생 요청
+  if (!bytes || !bytes.length) { speakWindows(text, btn); return; }
+  const audio = new Audio(URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" })));
+  audio.playbackRate = 0.9;
+  ttsAudio = audio;
+  const done = () => {
+    if (ttsAudio !== audio) return;
+    URL.revokeObjectURL(audio.src);
+    ttsAudio = null;
+    endSpeak(btn);
+  };
+  audio.onended = done;
+  const fail = () => { if (ttsAudio === audio) { done(); speakWindows(text, btn); } };
+  audio.onerror = fail;
+  audio.play().catch(fail);
+}
+function speakText(text, btn) {
+  if (!text) return;
+  const again = speakingBtn === btn;
+  stopSpeak();
+  if (again) return;                                       // 같은 버튼을 재생 중 다시 누르면 중단만
+  if (ttsEngine === "google") speakGoogle(text, btn);
+  else speakWindows(text, btn);
 }
 function speakWord() { if (speechOn && deck.length) speakText(wordText(deck[idx]), fcSpeak); }
 function speakEx() {
@@ -877,7 +936,7 @@ function answerCandidates(kana) {
 // 범위(북마크 / 전체 / CSV 리스트)에 해당하는 단어 — 원본(파일) 순서 유지
 function scopeWords(scope) {
   return scope.type === "bookmark"
-    ? WORDS.filter(isBookmarked)
+    ? bookmarkedWords()
     : WORDS.filter(w => scope.list === null || (w.list || "") === scope.list);
 }
 
@@ -906,7 +965,7 @@ function showQuizPicker() {
   quizInf.style.display = "none";
   quizPickList.innerHTML = "";
   // 북마크 (최상단)
-  const bmCount = WORDS.filter(isBookmarked).length;
+  const bmCount = bookmarkedWords().length;
   quizPickList.appendChild(makeQuizPickRow("★ 북마크", { type: "bookmark" }, bmCount));
   // 전체
   quizPickList.appendChild(makeQuizPickRow("전체", { type: "list", list: null }, WORDS.length));
@@ -1510,15 +1569,41 @@ document.querySelectorAll(".back-btn[data-back]").forEach(b => { b.onclick = () 
 const optSpeech = document.getElementById("optSpeech");
 const settingsMsg = document.getElementById("settingsMsg");
 // 설정 화면 열 때: 저장된 값으로 체크 상태 복원 (저장 안 한 변경은 버림)
+const optTtsEngine = document.getElementById("optTtsEngine");
+const optTtsVoice = document.getElementById("optTtsVoice");
+// 윈도우 일본어 음성 목록 채우기 (음성 목록은 늦게 로드될 수 있어 voiceschanged 때도 다시 채움)
+function fillVoiceOptions() {
+  const list = jaVoices();
+  const selected = optTtsVoice.value || ttsVoice;
+  optTtsVoice.innerHTML = "";
+  if (!list.length) {
+    optTtsVoice.add(new Option("일본어 음성 없음", ""));
+    optTtsVoice.disabled = true;
+    return;
+  }
+  optTtsVoice.disabled = false;
+  list.forEach(v => optTtsVoice.add(new Option(v.name, v.name)));
+  optTtsVoice.value = list.some(v => v.name === selected) ? selected : list[0].name;
+}
+if (window.speechSynthesis) speechSynthesis.addEventListener("voiceschanged", fillVoiceOptions);
 function loadSettingsForm() {
   optSpeech.checked = speechOn;
+  optTtsEngine.value = ttsEngine;
+  optTtsVoice.value = "";
+  fillVoiceOptions();
   settingsMsg.textContent = "";
 }
-optSpeech.onchange = () => { settingsMsg.textContent = ""; };
+optSpeech.onchange = optTtsEngine.onchange = optTtsVoice.onchange = () => { settingsMsg.textContent = ""; };
 document.getElementById("settingsSaveBtn").onclick = () => {
   speechOn = optSpeech.checked;
   localStorage.setItem(SPEECH_KEY, speechOn ? "1" : "0");
-  if (!speechOn) stopSpeak();
+  ttsEngine = optTtsEngine.value;
+  localStorage.setItem(TTS_ENGINE_KEY, ttsEngine);
+  if (optTtsVoice.value) {
+    ttsVoice = optTtsVoice.value;
+    localStorage.setItem(TTS_VOICE_KEY, ttsVoice);
+  }
+  stopSpeak();
   settingsMsg.textContent = "저장되었습니다 ✓";
 };
 

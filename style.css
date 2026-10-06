@@ -417,6 +417,14 @@ html, body {
 }
 .setting-row input { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
 .setting-desc { width: 100%; padding-left: 24px; font-size: .72rem; font-weight: 400; color: var(--sub); }
+/* 선택 상자 행 (음성 종류 / 윈도우 음성) */
+.setting-select { margin-top: 10px; cursor: default; }
+.setting-select select {
+  margin-left: auto; max-width: 200px; padding: 4px 6px;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: var(--card); color: var(--text); font-size: .8rem; cursor: pointer;
+}
+.setting-select .setting-desc { padding-left: 0; }
 #settingsSaveBtn {
   display: block; max-width: 360px; width: 100%; margin: 16px auto 0;
   padding: 9px; border: 1px solid var(--accent); border-radius: 9px;

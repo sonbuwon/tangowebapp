@@ -240,6 +240,8 @@ contextBridge.exposeInMainWorld('boss', {
   onFitHeight: (cb) => ipcRenderer.on('fitHeight', (_e, on) => cb(on)),
   // 메인 프로세스가 보낸 화면 전환 신호 ('home' | 'vocab' | 'flash' | 'quiz' | 'settings')
   onView: (cb) => ipcRenderer.on('view', (_e, v) => cb(v)),
+  // 구글 음성(온라인) MP3 받아오기 → Promise<Uint8Array|null>
+  tts: (text) => ipcRenderer.invoke('boss:tts', text),
   // words.csv 에서 읽어온 단어 목록
   words: loadWords(),
   // 새 단어를 words.csv 에 추가 → { ok, error? }

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline';" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:;" />
   <title>&nbsp;</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -124,6 +124,19 @@
     <div class="settings-wrap">
       <button type="button" class="back-btn" data-back="settings">← 뒤로</button>
       <label class="setting-row"><input type="checkbox" id="optSpeech" /> 음성 기능 <span class="setting-desc">플래시카드 🔊 읽어주기 버튼 (S·D 키)</span></label>
+      <div class="setting-row setting-select">
+        <span>음성 종류</span>
+        <select id="optTtsEngine">
+          <option value="google">구글 음성 (온라인)</option>
+          <option value="windows">윈도우 음성</option>
+        </select>
+        <span class="setting-desc">구글 음성은 인터넷이 필요하며, 실패하면 윈도우 음성으로 읽습니다.</span>
+      </div>
+      <div class="setting-row setting-select">
+        <span>윈도우 음성</span>
+        <select id="optTtsVoice"></select>
+        <span class="setting-desc">윈도우에 설치된 일본어 음성 중 선택</span>
+      </div>
       <button type="button" id="settingsSaveBtn">저장</button>
       <div id="settingsMsg"></div>
     </div>
