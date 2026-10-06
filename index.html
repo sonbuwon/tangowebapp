@@ -137,6 +137,12 @@
         <select id="optTtsVoice"></select>
         <span class="setting-desc">윈도우에 설치된 일본어 음성 중 선택</span>
       </div>
+      <div class="setting-row setting-select">
+        <span>읽기 속도</span>
+        <input type="range" id="optTtsRate" min="0.5" max="2" step="0.1" />
+        <span id="optTtsRateVal" class="rate-val"></span>
+        <button type="button" id="ttsPreviewBtn" title="저장 전 설정으로 들어보기">🔊 미리 들어보기</button>
+      </div>
       <button type="button" id="settingsSaveBtn">저장</button>
       <div id="settingsMsg"></div>
     </div>

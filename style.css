@@ -425,6 +425,15 @@ html, body {
   background: var(--card); color: var(--text); font-size: .8rem; cursor: pointer;
 }
 .setting-select .setting-desc { padding-left: 0; }
+.setting-select input[type="range"] { flex: 1; min-width: 100px; width: auto; height: auto; }
+.setting-select .rate-val { min-width: 36px; font-size: .8rem; color: var(--sub); text-align: right; }
+#ttsPreviewBtn {
+  width: 100%; margin-top: 4px; padding: 6px;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--card); color: var(--text); font-size: .8rem; cursor: pointer;
+}
+#ttsPreviewBtn:hover { border-color: var(--accent); }
+#ttsPreviewBtn.speaking { border-color: var(--accent); background: var(--accent-soft); }
 #settingsSaveBtn {
   display: block; max-width: 360px; width: 100%; margin: 16px auto 0;
   padding: 9px; border: 1px solid var(--accent); border-radius: 9px;

@@ -303,13 +303,19 @@ const TTS_ENGINE_KEY = "vocabTtsEngine";
 const TTS_VOICE_KEY = "vocabTtsVoice";
 let ttsEngine = localStorage.getItem(TTS_ENGINE_KEY) || "google";
 let ttsVoice = localStorage.getItem(TTS_VOICE_KEY) || "";
+// 읽기 속도 (0.5 ~ 2.0배, 기본 0.9) — 구글 음성·윈도우 음성 공통
+const TTS_RATE_KEY = "vocabTtsRate";
+function clampRate(r) { r = Number(r); return Number.isFinite(r) ? Math.min(2, Math.max(0.5, r)) : 0.9; }
+let ttsRate = clampRate(localStorage.getItem(TTS_RATE_KEY) || 0.9);
+// 현재 저장된 음성 설정 (미리 들어보기는 저장 전 설정 화면 값을 넘김)
+function savedTtsOpts() { return { engine: ttsEngine, voice: ttsVoice, rate: ttsRate }; }
 function jaVoices() {
   const voices = window.speechSynthesis ? speechSynthesis.getVoices() : [];
   return voices.filter(v => /^ja([-_]|$)/i.test(v.lang));
 }
-function pickJaVoice() {
+function pickJaVoice(name) {
   const list = jaVoices();
-  return list.find(v => v.name === ttsVoice) || list[0] || null;
+  return list.find(v => v.name === name) || list[0] || null;
 }
 if (window.speechSynthesis) speechSynthesis.getVoices();   // 음성 목록 미리 로드 (첫 호출은 비어 있을 수 있음)
 let speakingBtn = null;                                    // 현재 재생 중인 버튼
@@ -323,33 +329,34 @@ function stopSpeak() {
     URL.revokeObjectURL(ttsAudio.src);
     ttsAudio = null;
   }
+  if (speakingBtn) speakingBtn.classList.remove("speaking");
   fcSpeak.classList.remove("speaking");
   fcSpeakEx.classList.remove("speaking");
   speakingBtn = null;
 }
 function endSpeak(btn) { btn.classList.remove("speaking"); if (speakingBtn === btn) speakingBtn = null; }
 // 윈도우 음성으로 읽기
-function speakWindows(text, btn) {
+function speakWindows(text, btn, opts) {
   if (!window.speechSynthesis) { endSpeak(btn); alert("이 환경에서는 음성 읽기를 지원하지 않습니다."); return; }
   const u = new SpeechSynthesisUtterance(text);
   u.lang = "ja-JP";
-  const v = pickJaVoice();
+  const v = pickJaVoice(opts.voice);
   if (v) u.voice = v;
-  u.rate = 0.9;
+  u.rate = opts.rate;
   u.onstart = () => { speakingBtn = btn; btn.classList.add("speaking"); };
   u.onend = u.onerror = () => endSpeak(btn);
   speechSynthesis.speak(u);
 }
 // 구글 음성으로 읽기 (받아오기 실패·재생 실패 시 윈도우 음성으로 대체)
-async function speakGoogle(text, btn) {
+async function speakGoogle(text, btn, opts) {
   const token = ++ttsToken;
   speakingBtn = btn; btn.classList.add("speaking");        // 받아오는 동안에도 재생 중 표시
   let bytes = null;
   try { bytes = window.boss && window.boss.tts ? await window.boss.tts(text) : null; } catch (_) {}
   if (token !== ttsToken) return;                          // 그 사이 중단/다른 재생 요청
-  if (!bytes || !bytes.length) { speakWindows(text, btn); return; }
+  if (!bytes || !bytes.length) { speakWindows(text, btn, opts); return; }
   const audio = new Audio(URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" })));
-  audio.playbackRate = 0.9;
+  audio.playbackRate = opts.rate;
   ttsAudio = audio;
   const done = () => {
     if (ttsAudio !== audio) return;
@@ -358,17 +365,17 @@ async function speakGoogle(text, btn) {
     endSpeak(btn);
   };
   audio.onended = done;
-  const fail = () => { if (ttsAudio === audio) { done(); speakWindows(text, btn); } };
+  const fail = () => { if (ttsAudio === audio) { done(); speakWindows(text, btn, opts); } };
   audio.onerror = fail;
   audio.play().catch(fail);
 }
-function speakText(text, btn) {
+function speakText(text, btn, opts = savedTtsOpts()) {
   if (!text) return;
   const again = speakingBtn === btn;
   stopSpeak();
   if (again) return;                                       // 같은 버튼을 재생 중 다시 누르면 중단만
-  if (ttsEngine === "google") speakGoogle(text, btn);
-  else speakWindows(text, btn);
+  if (opts.engine === "google") speakGoogle(text, btn, opts);
+  else speakWindows(text, btn, opts);
 }
 function speakWord() { if (speechOn && deck.length) speakText(wordText(deck[idx]), fcSpeak); }
 function speakEx() {
@@ -1571,6 +1578,16 @@ const settingsMsg = document.getElementById("settingsMsg");
 // 설정 화면 열 때: 저장된 값으로 체크 상태 복원 (저장 안 한 변경은 버림)
 const optTtsEngine = document.getElementById("optTtsEngine");
 const optTtsVoice = document.getElementById("optTtsVoice");
+const optTtsRate = document.getElementById("optTtsRate");
+const optTtsRateVal = document.getElementById("optTtsRateVal");
+const ttsPreviewBtn = document.getElementById("ttsPreviewBtn");
+const TTS_PREVIEW_TEXT = "こんにちは。きょうも にほんごを べんきょうしましょう。";
+function showRateVal() { optTtsRateVal.textContent = `${Number(optTtsRate.value).toFixed(1)}배`; }
+optTtsRate.oninput = () => { showRateVal(); settingsMsg.textContent = ""; };
+// 미리 들어보기: 저장 전 설정 화면에서 고른 음성 종류·음성·속도로 재생 (재생 중 다시 누르면 중단)
+ttsPreviewBtn.onclick = () => speakText(TTS_PREVIEW_TEXT, ttsPreviewBtn, {
+  engine: optTtsEngine.value, voice: optTtsVoice.value, rate: clampRate(optTtsRate.value),
+});
 // 윈도우 일본어 음성 목록 채우기 (음성 목록은 늦게 로드될 수 있어 voiceschanged 때도 다시 채움)
 function fillVoiceOptions() {
   const list = jaVoices();
@@ -1589,6 +1606,8 @@ if (window.speechSynthesis) speechSynthesis.addEventListener("voiceschanged", fi
 function loadSettingsForm() {
   optSpeech.checked = speechOn;
   optTtsEngine.value = ttsEngine;
+  optTtsRate.value = ttsRate;
+  showRateVal();
   optTtsVoice.value = "";
   fillVoiceOptions();
   settingsMsg.textContent = "";
@@ -1599,6 +1618,8 @@ document.getElementById("settingsSaveBtn").onclick = () => {
   localStorage.setItem(SPEECH_KEY, speechOn ? "1" : "0");
   ttsEngine = optTtsEngine.value;
   localStorage.setItem(TTS_ENGINE_KEY, ttsEngine);
+  ttsRate = clampRate(optTtsRate.value);
+  localStorage.setItem(TTS_RATE_KEY, String(ttsRate));
   if (optTtsVoice.value) {
     ttsVoice = optTtsVoice.value;
     localStorage.setItem(TTS_VOICE_KEY, ttsVoice);

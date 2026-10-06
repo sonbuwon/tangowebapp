@@ -55,7 +55,7 @@ function ask(list) {
   const args = ['.'];
   if (list.length >= 2) {
     const d = await ask(list);
-    args.push(`--display-id=${d.id}`);
+    args.push(`--display-id=${d.id}`, '--show');   // 고른 모니터에 바로 띄움
   }
   const child = spawn(electron, args, { cwd: __dirname, stdio: 'inherit' });
   child.on('close', (code) => process.exit(code ?? 0));

@@ -108,6 +108,9 @@ function createWindow() {
 
   win.loadFile('index.html');
 
+  // start.js 에서 모니터를 고르고(번호 입력/엔터) 실행했으면 로드가 끝나는 대로 그 모니터에 바로 표시
+  if (process.argv.includes('--show')) win.once('ready-to-show', show);
+
   // 닫기 버튼/Alt+F4를 눌러도 종료 대신 숨김 (트레이에 살아있음)
   win.on('close', (e) => {
     if (!app.isQuiting) {
