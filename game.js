@@ -335,47 +335,59 @@ function stopSpeak() {
   speakingBtn = null;
 }
 function endSpeak(btn) { btn.classList.remove("speaking"); if (speakingBtn === btn) speakingBtn = null; }
-// 윈도우 음성으로 읽기
-function speakWindows(text, btn, opts) {
-  if (!window.speechSynthesis) { endSpeak(btn); alert("이 환경에서는 음성 읽기를 지원하지 않습니다."); return; }
+const TTS_GAP_MS = 700;                                    // 여러 문장을 이어 읽을 때 사이 쉼(ms)
+// 윈도우 음성으로 한 문장 읽기 → 끝나면 onDone()
+function speakWindows(text, opts, onDone) {
+  if (!window.speechSynthesis) { alert("이 환경에서는 음성 읽기를 지원하지 않습니다."); onDone(); return; }
   const u = new SpeechSynthesisUtterance(text);
   u.lang = "ja-JP";
   const v = pickJaVoice(opts.voice);
   if (v) u.voice = v;
   u.rate = opts.rate;
-  u.onstart = () => { speakingBtn = btn; btn.classList.add("speaking"); };
-  u.onend = u.onerror = () => endSpeak(btn);
+  u.onend = u.onerror = onDone;
   speechSynthesis.speak(u);
 }
-// 구글 음성으로 읽기 (받아오기 실패·재생 실패 시 윈도우 음성으로 대체)
-async function speakGoogle(text, btn, opts) {
-  const token = ++ttsToken;
-  speakingBtn = btn; btn.classList.add("speaking");        // 받아오는 동안에도 재생 중 표시
+// 구글 음성으로 한 문장 읽기 → 끝나면 onDone() (받아오기 실패·재생 실패 시 윈도우 음성으로 대체)
+async function speakGoogle(text, opts, onDone, token) {
   let bytes = null;
   try { bytes = window.boss && window.boss.tts ? await window.boss.tts(text) : null; } catch (_) {}
   if (token !== ttsToken) return;                          // 그 사이 중단/다른 재생 요청
-  if (!bytes || !bytes.length) { speakWindows(text, btn, opts); return; }
+  if (!bytes || !bytes.length) { speakWindows(text, opts, onDone); return; }
   const audio = new Audio(URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" })));
   audio.playbackRate = opts.rate;
   ttsAudio = audio;
-  const done = () => {
-    if (ttsAudio !== audio) return;
+  const release = () => {
+    if (ttsAudio !== audio) return false;
     URL.revokeObjectURL(audio.src);
     ttsAudio = null;
-    endSpeak(btn);
+    return true;
   };
-  audio.onended = done;
-  const fail = () => { if (ttsAudio === audio) { done(); speakWindows(text, btn, opts); } };
+  audio.onended = () => { if (release()) onDone(); };
+  const fail = () => { if (release()) speakWindows(text, opts, onDone); };
   audio.onerror = fail;
   audio.play().catch(fail);
 }
+// text 는 문자열 또는 문자열 배열 (배열이면 TTS_GAP_MS 만큼 쉬며 차례로 읽음)
 function speakText(text, btn, opts = savedTtsOpts()) {
-  if (!text) return;
+  const texts = (Array.isArray(text) ? text : [text]).map(t => (t || "").trim()).filter(Boolean);
+  if (!texts.length) return;
   const again = speakingBtn === btn;
   stopSpeak();
   if (again) return;                                       // 같은 버튼을 재생 중 다시 누르면 중단만
-  if (opts.engine === "google") speakGoogle(text, btn, opts);
-  else speakWindows(text, btn, opts);
+  const token = ++ttsToken;
+  speakingBtn = btn; btn.classList.add("speaking");        // 받아오는 동안·쉼 동안에도 재생 중 표시
+  const playAt = (i) => {
+    if (token !== ttsToken) return;
+    if (i >= texts.length) { endSpeak(btn); return; }
+    const next = () => {
+      if (token !== ttsToken) return;
+      if (i + 1 >= texts.length) endSpeak(btn);
+      else setTimeout(() => playAt(i + 1), TTS_GAP_MS);
+    };
+    if (opts.engine === "google") speakGoogle(texts[i], opts, next, token);
+    else speakWindows(texts[i], opts, next);
+  };
+  playAt(0);
 }
 function speakWord() { if (speechOn && deck.length) speakText(wordText(deck[idx]), fcSpeak); }
 function speakEx() {
@@ -1023,6 +1035,7 @@ function startInputQuiz() {
 function isReverseQuiz(w) { return !w.kanji || w.kanji === w.kana; }
 
 function showQuizCard() {
+  stopSpeak();                                              // 이전 문제 발음 재생 중이면 중단
   quizAnswered = false;
   const w = quizDeck[quizIdx];
   const reverse = isReverseQuiz(w);
@@ -1096,6 +1109,18 @@ quizForm.addEventListener("submit", (e) => {
     exBox.appendChild(line);
   });
   if (exBox.childElementCount) quizResult.appendChild(exBox);
+  // 음성 버튼: 단어 히라가나 → (쉼) → 예문 히라가나 순으로 읽기
+  if (speechOn && (wordText(w) || exText(w))) {
+    const speakBtn = document.createElement("button");
+    speakBtn.type = "button";
+    speakBtn.className = "quiz-speak";
+    speakBtn.textContent = "🔊 발음 듣기";
+    speakBtn.onclick = () => {
+      speakText([wordText(w), exText(w)], speakBtn);
+      quizNext.focus();                                     // 클릭 후에도 Enter = 다음 문제 유지
+    };
+    quizResult.appendChild(speakBtn);
+  }
   quizProgress.textContent = `${quizIdx + 1} / ${quizDeck.length}  ·  정답 ${quizScore}`;
   quizNext.style.display = "";
   setTimeout(() => quizNext.focus(), 0);
