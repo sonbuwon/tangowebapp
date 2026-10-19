@@ -42,6 +42,8 @@ function csvPath() {
   for (const c of candidates) {
     try { if (c && fs.existsSync(c)) return c; } catch (_) {}
   }
+  // 파일이 없으면(.gitignore 로 clone 시 빠짐) 헤더만 있는 빈 CSV 생성
+  try { fs.writeFileSync(candidates[1], '﻿' + HEADER + '\r\n', 'utf8'); } catch (_) {}
   return candidates[1];
 }
 
