@@ -704,6 +704,8 @@ html, body {
 /* 플래시카드 왼쪽 상단: 단어(히라가나) 읽어주기 버튼 / 펼침 칸 왼쪽 상단: 예문 읽어주기 버튼 */
 .fc-speak { position: absolute; top: 10px; left: 10px; right: auto; z-index: 3; font-size: .85rem; }
 .fc-speak-ex { top: 10px; left: 0; }
+/* 예문 읽어주기 버튼은 '예문 보기' 체크 시에만 표시 (JS 인라인 display 보다 우선) */
+.flashcard:not(.show-ex) .fc-speak-ex { display: none !important; }
 .fc-speak.speaking { background: #1e3a4a; color: #6bd3ff; border-color: #2a5a6b; }
 .fc-speak:disabled { opacity: .35; cursor: default; }
 

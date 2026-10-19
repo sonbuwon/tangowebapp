@@ -286,6 +286,7 @@ applyShowEx();
 fcShowEx.onchange = () => {
   localStorage.setItem(FC_EX_KEY, fcShowEx.checked ? "1" : "0");
   applyShowEx();
+  if (!fcShowEx.checked && speakingBtn === fcSpeakEx) stopSpeak();  // 체크 해제 시 재생 중인 예문 음성 중단
 };
 document.getElementById("prevBtn").onclick = prev;   // 이전 카드
 document.getElementById("nextBtn").onclick = next;   // 다음 카드
@@ -392,7 +393,8 @@ function speakText(text, btn, opts = savedTtsOpts()) {
 function speakWord() { if (speechOn && deck.length) speakText(wordText(deck[idx]), fcSpeak); }
 function speakEx() {
   if (!speechOn || !deck.length) return;
-  // 예문은 펼친 상태에서만 읽기 (버튼도 펼쳤을 때만 보임)
+  // 예문은 '예문 보기' 체크 + 펼친 상태에서만 읽기 (버튼도 그때만 보임)
+  if (!fcShowEx.checked) return;
   if (!document.getElementById("flashcard").classList.contains("revealed")) return;
   speakText(exText(deck[idx]), fcSpeakEx);
 }
