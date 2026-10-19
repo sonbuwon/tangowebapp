@@ -173,10 +173,16 @@ function show() {
   }, ms));
 }
 
-function hide() {
+// all = true (패닉키) 면 타이머 창까지 무조건 숨김.
+// 그 외(Esc·Alt+Q·트레이)에는 타이머가 동작 중이면 타이머 창은 그대로 보이게 둠
+// (일시정지·정지·완료 상태면 함께 숨김, 시간은 숨겨져도 계속 흐름)
+function hide(all = false) {
   if (!win) return;
   win.hide();
-  if (timerWin) timerWin.hide();   // 타이머 창도 함께 숨김 (시간은 계속 흐름)
+  if (timerWin) {
+    if (all === true || timer.state !== 'running') timerWin.hide();
+    else setTimerAlone(true);   // 타이머 창만 남음 → 마우스로 옮길 수 있게
+  }
   visible = false;
 }
 
@@ -186,8 +192,7 @@ function hide() {
 // state: 'running' | 'paused' | 'stopped'(설정 시간으로 되돌려 멈춤) | 'done'(00:00:00)
 let timerWin = null;
 const timer = { duration: 0, remaining: 0, endAt: 0, state: 'stopped' };
-let timerTick = null;
-let timerLastSec = -1;
+let timerTick = null;   // 종료 시각에 'done' 으로 바꾸는 setTimeout
 
 function timerReserve() { return timerWin ? TIMER_H + TIMER_GAP : 0; }
 
@@ -210,8 +215,19 @@ function positionTimer() {
   timerWin.setBounds({ x: b.x, y: b.y + b.height + TIMER_GAP, width: b.width, height: TIMER_H });
 }
 
+// 타이머 창만 남았을 때(본 창 숨김 + 타이머 동작 중)만 끌어서 옮길 수 있음.
+// 본 창이 다시 보이면 고정으로 돌아가고 본 창 아래 원래 자리로 다시 붙음
+let timerAlone = false;
+function setTimerAlone(alone) {
+  timerAlone = alone;
+  if (!timerWin || timerWin.isDestroyed()) return;
+  timerWin.setMovable(alone);
+  timerWin.webContents.send('timer:alone', alone);   // 창 전체를 끌기 영역으로 (버튼 제외)
+}
+
 function showTimerWin() {
   if (!timerWin || !visible) return;
+  setTimerAlone(false);
   fitMainForTimer();
   positionTimer();
   timerWin.setAlwaysOnTop(true, 'screen-saver');
@@ -240,7 +256,10 @@ function createTimerWin() {
     },
   });
   timerWin.loadFile('timer.html');
-  timerWin.webContents.on('did-finish-load', () => sendTimerState(true));
+  timerWin.webContents.on('did-finish-load', () => {
+    sendTimerState();
+    timerWin.webContents.send('timer:alone', timerAlone);
+  });
   timerWin.on('closed', () => { timerWin = null; });
 }
 
@@ -248,30 +267,30 @@ function timerRemaining() {
   return timer.state === 'running' ? Math.max(0, timer.endAt - Date.now()) : timer.remaining;
 }
 
-// 타이머 창에 상태 전송 (초가 바뀌었거나 상태가 바뀐 경우)
-function sendTimerState(force) {
+// 타이머 창에 상태 전송 (상태가 바뀔 때만).
+// 동작 중에는 종료 시각(endAt)을 보내 타이머 창이 밀리초까지 직접 계산·표시
+function sendTimerState() {
   if (!timerWin || timerWin.isDestroyed()) return;
-  const sec = Math.ceil(timerRemaining() / 1000);
-  if (!force && sec === timerLastSec) return;
-  timerLastSec = sec;
-  timerWin.webContents.send('timer:state', { sec, state: timer.state });
+  timerWin.webContents.send('timer:state', {
+    remaining: timerRemaining(),
+    endAt: timer.state === 'running' ? timer.endAt : 0,
+    state: timer.state,
+  });
 }
 
+// 동작 중이면 종료 시각에 'done'(00:00:00.00 에서 멈춤, 다른 알림 없음) 으로 전환
 function runTimerTick() {
-  clearInterval(timerTick);
+  clearTimeout(timerTick);
   timerTick = null;
   if (timer.state !== 'running') return;
-  timerTick = setInterval(() => {
-    if (timer.state === 'running' && timerRemaining() <= 0) {
-      timer.state = 'done';             // 00:00:00 에서 멈춤 (다른 알림 없음)
-      timer.remaining = 0;
-      clearInterval(timerTick);
-      timerTick = null;
-      sendTimerState(true);
-      return;
-    }
-    sendTimerState(false);
-  }, 200);
+  timerTick = setTimeout(() => {
+    timerTick = null;
+    if (timer.state !== 'running') return;
+    if (timerRemaining() > 0) { runTimerTick(); return; }   // 타이머가 조금 일찍 깨어난 경우 다시 대기
+    timer.state = 'done';
+    timer.remaining = 0;
+    sendTimerState();
+  }, timerRemaining());
 }
 
 function setTimerState(state) {
@@ -282,7 +301,7 @@ function setTimerState(state) {
   }
   timer.state = state;
   runTimerTick();
-  sendTimerState(true);
+  sendTimerState();
 }
 
 function startTimer(sec) {
@@ -297,9 +316,10 @@ function startTimer(sec) {
 }
 
 function closeTimer() {
-  clearInterval(timerTick);
+  clearTimeout(timerTick);
   timerTick = null;
   timer.state = 'stopped';
+  timerAlone = false;
   if (timerWin && !timerWin.isDestroyed()) timerWin.destroy();
   timerWin = null;
 }
@@ -319,7 +339,7 @@ function timerAction(action) {
     timer.state = 'stopped';
     timer.remaining = timer.duration;
     runTimerTick();
-    sendTimerState(true);
+    sendTimerState();
   }
 }
 
@@ -411,7 +431,7 @@ app.whenReady().then(() => {
     }
   };
   reg(KEY_TOGGLE, toggle);
-  reg(KEY_PANIC, hide);
+  reg(KEY_PANIC, () => hide(true));
   reg(KEY_HOME, () => switchView('home'));
   reg(KEY_VOCAB, () => switchView('vocab'));
   reg(KEY_FLASH, () => switchView('flash'));
@@ -419,7 +439,7 @@ app.whenReady().then(() => {
   reg(KEY_QUIZ, () => switchView('quiz'));
 
   // 렌더러(게임 화면)에서 Esc를 누르면 숨김 요청이 옴
-  ipcMain.on('boss:hide', hide);
+  ipcMain.on('boss:hide', () => hide());   // 이벤트 객체가 all 인자로 넘어가지 않게
   // 제목 표시줄 '세로 늘리기' 버튼 → 다음 단계로 바꾼 뒤 현재 단계(0=기본, 1=좀 더 길게, 2=꽉 채움) 반환
   ipcMain.handle('boss:fitHeight', () => toggleFitHeight());
   // 타이머: 본 창 설정 화면의 '시작' (초 단위) / 타이머 창 버튼 ('toggle' | 'restart' | 'stop')

@@ -26,25 +26,37 @@
       border: 1px solid var(--line);
     }
     #time {
-      flex: 1; font-size: 26px; font-weight: 700; letter-spacing: 1px;
-      font-variant-numeric: tabular-nums;
+      font-size: 26px; font-weight: 700; letter-spacing: 1px;
+      font-variant-numeric: tabular-nums; white-space: nowrap;
     }
+    #time .ms { font-size: 18px; }                 /* 밀리초(1/100초) 두 자리는 조금 작게 */
     #wrap.paused #time, #wrap.stopped #time { color: var(--sub); }
+    /* 마우스를 올린 버튼 이름 (창이 낮아 말풍선 대신 버튼 왼쪽에 표시) */
+    #hint {
+      flex: 1; min-width: 0; text-align: right; font-size: .75rem; color: var(--sub);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
     button {
-      padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px;
-      background: var(--card); color: var(--text); font-size: .8rem; cursor: pointer;
+      width: 36px; height: 32px; padding: 0;
+      border: 1px solid var(--line); border-radius: 8px;
+      background: var(--card); color: var(--text); font-size: 16px; line-height: 1; cursor: pointer;
+      font-family: "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
     }
     button:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
     button:disabled { opacity: .4; cursor: default; }
+    /* 타이머 창만 남았을 때: 버튼을 뺀 나머지를 잡고 끌어서 창 이동 */
+    body.alone #wrap { -webkit-app-region: drag; border-color: var(--accent); }
+    body.alone button { -webkit-app-region: no-drag; }
   </style>
 </head>
 <body>
-  <!-- 본 창 아래 붙는 타이머 창: 남은 시간 + 일시정지/계속 · 재시작 · 정지 -->
+  <!-- 본 창 아래 붙는 타이머 창: 남은 시간(시:분:초.1/100초) + 일시정지/계속 · 재시작 · 정지 -->
   <div id="wrap" class="stopped">
-    <span id="time">00:00:00</span>
-    <button type="button" id="toggleBtn">일시정지</button>
-    <button type="button" id="restartBtn">재시작</button>
-    <button type="button" id="stopBtn" title="정지: 설정한 시간으로 되돌림 · 정지 상태에서 한 번 더 누르면 타이머 끄기">정지</button>
+    <span id="time">00:00:00<span class="ms">.00</span></span>
+    <span id="hint"></span>
+    <button type="button" id="toggleBtn" aria-label="일시정지">⏸️</button>
+    <button type="button" id="restartBtn" aria-label="재시작">🔄</button>
+    <button type="button" id="stopBtn" aria-label="정지">⏹️</button>
   </div>
   <script src="timer.js"></script>
 </body>
