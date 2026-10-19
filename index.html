@@ -132,6 +132,12 @@
         <input type="text" id="timerS" class="timer-num" inputmode="numeric" maxlength="2" />
         <div class="timer-labels"><span>시간</span><span>분</span><span>초</span></div>
       </form>
+      <!-- 빠른 설정: 누르면 시:분:초 칸에 바로 채움 -->
+      <div class="timer-presets">
+        <button type="button" class="timer-preset" data-hms="0,15,0">15분</button>
+        <button type="button" class="timer-preset" data-hms="0,30,0">30분</button>
+        <button type="button" class="timer-preset" data-hms="1,0,0">1시간</button>
+      </div>
       <button type="submit" form="timerForm" id="timerStartBtn" class="settings-save">시작</button>
       <div id="timerMsg" class="settings-msg"></div>
     </div>

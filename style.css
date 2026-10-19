@@ -502,6 +502,13 @@ html, body {
 .timer-sep { font-size: 1.4rem; font-weight: 700; color: var(--sub); }
 .timer-labels { width: 100%; display: flex; justify-content: center; gap: 22px; font-size: .72rem; color: var(--sub); }
 .timer-labels span { width: 64px; text-align: center; }
+/* 빠른 설정 버튼 3개 (나란히) */
+.timer-presets { display: flex; gap: 8px; max-width: 360px; margin: 14px auto 0; }
+.timer-preset {
+  flex: 1; padding: 7px 0; border: 1px solid var(--line); border-radius: 9px;
+  background: var(--card); color: var(--text); font-size: .82rem; font-weight: 600; cursor: pointer;
+}
+.timer-preset:hover { border-color: var(--accent); }
 #settingsSaveBtn, .settings-save {
   display: block; max-width: 360px; width: 100%; margin: 16px auto 0;
   padding: 9px; border: 1px solid var(--accent); border-radius: 9px;

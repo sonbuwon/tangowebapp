@@ -1762,6 +1762,13 @@ timerInputs.forEach((input, i) => {
   input.addEventListener("blur", () => { input.value = String(timerNum(input, i)).padStart(2, "0"); });
   input.addEventListener("input", () => { timerMsg.textContent = ""; });
 });
+// 빠른 설정 버튼(15분 / 30분 / 1시간) → 입력칸만 채움 (시작은 '시작' 버튼으로)
+document.querySelectorAll(".timer-preset").forEach(btn => {
+  btn.addEventListener("click", () => {
+    fillTimerForm(btn.dataset.hms.split(",").map(Number));
+    timerMsg.textContent = "";
+  });
+});
 document.getElementById("timerForm").addEventListener("submit", (e) => {
   e.preventDefault();
   const hms = timerInputs.map(timerNum);
