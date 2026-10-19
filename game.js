@@ -260,7 +260,7 @@ function seekTo(i) {
   fcSeek.addEventListener("pointercancel", end);
 })();
 
-/* 카드 클릭/↑ → 같은 화면에서 히라가나·뜻 펼치기/접기 */
+/* 카드 클릭/↓ →같은 화면에서 히라가나·뜻 펼치기/접기 */
 function flip() { if (deck.length) document.getElementById("flashcard").classList.toggle("revealed"); }
 function prev() { if (!deck.length) return; idx = (idx - 1 + deck.length) % deck.length; showCard(); }
 function next() { if (!deck.length) return; idx = (idx + 1) % deck.length; showCard(); }
@@ -483,9 +483,9 @@ document.addEventListener("keydown", e => {
   if (curView !== "vocab" || curMode !== "flash") return;
   if (e.key === "ArrowRight") next();
   if (e.key === "ArrowLeft") prev();
-  if (e.key === "ArrowUp") { e.preventDefault(); flip(); }
-  // ↓ → '예문 보기' 체크 설정/해제 (체크박스와 동일하게 저장·반영)
-  if (e.key === "ArrowDown") {
+  if (e.key === "ArrowDown") { e.preventDefault(); flip(); }
+  // ↑ → '예문 보기' 체크 설정/해제 (체크박스와 동일하게 저장·반영)
+  if (e.key === "ArrowUp") {
     e.preventDefault();
     fcShowEx.checked = !fcShowEx.checked;
     fcShowEx.dispatchEvent(new Event("change"));
@@ -1109,17 +1109,23 @@ quizForm.addEventListener("submit", (e) => {
     exBox.appendChild(line);
   });
   if (exBox.childElementCount) quizResult.appendChild(exBox);
-  // 음성 버튼: 단어 히라가나 → (쉼) → 예문 히라가나 순으로 읽기
+  // 음성 버튼: 단어 듣기 / 예문 듣기를 따로 제공
   if (speechOn && (wordText(w) || exText(w))) {
-    const speakBtn = document.createElement("button");
-    speakBtn.type = "button";
-    speakBtn.className = "quiz-speak";
-    speakBtn.textContent = "🔊 발음 듣기";
-    speakBtn.onclick = () => {
-      speakText([wordText(w), exText(w)], speakBtn);
-      quizNext.focus();                                     // 클릭 후에도 Enter = 다음 문제 유지
-    };
-    quizResult.appendChild(speakBtn);
+    const speakRow = document.createElement("div");
+    speakRow.className = "quiz-speak-row";
+    [["🔊 단어 듣기", wordText(w)], ["🔊 예문 듣기", exText(w)]].forEach(([label, text]) => {
+      if (!text) return;
+      const speakBtn = document.createElement("button");
+      speakBtn.type = "button";
+      speakBtn.className = "quiz-speak";
+      speakBtn.textContent = label;
+      speakBtn.onclick = () => {
+        speakText(text, speakBtn);
+        quizNext.focus();                                   // 클릭 후에도 Enter = 다음 문제 유지
+      };
+      speakRow.appendChild(speakBtn);
+    });
+    quizResult.appendChild(speakRow);
   }
   quizProgress.textContent = `${quizIdx + 1} / ${quizDeck.length}  ·  정답 ${quizScore}`;
   quizNext.style.display = "";
