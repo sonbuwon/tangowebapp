@@ -1,6 +1,7 @@
 const { app, BrowserWindow, globalShortcut, Tray, Menu, ipcMain, screen, dialog, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const ime = require('./ime');
 
 // ── 설정 (여기 숫자/키만 바꾸면 동작이 바뀝니다) ──────────────────
 const WIN_W = 440;          // 창 너비(px)
@@ -15,6 +16,8 @@ const KEY_VOCAB  = 'Alt+2';           // 단어장(목록) 화면으로 전환
 const KEY_FLASH  = 'Alt+3';           // 플래시카드 모드로 전환
 const KEY_QUIZ   = 'Alt+4';           // 시험 화면으로 전환
 const KEY_INPUT  = 'Alt+5';           // 설정 메뉴 화면으로 전환 (단어 관련 / 설정)
+
+const AUTO_IME = true;      // 창 포커스 시 일본어(히라가나), 숨김·다른 창·종료 시 한국어 입력기로 자동 전환
 // ───────────────────────────────────────────────────────────────
 
 // 구글 음성 요청 1회당 글자 수 제한(약 200자) → 문장부호 기준으로 나눔
@@ -111,6 +114,14 @@ function createWindow() {
   // start.js 에서 모니터를 고르고(번호 입력/엔터) 실행했으면 로드가 끝나는 대로 그 모니터에 바로 표시
   if (process.argv.includes('--show')) win.once('ready-to-show', show);
 
+  // 입력기 자동 전환: 포커스 → 일본어, 포커스 잃음(숨김 포함) → 한국어
+  // show() 의 포커스 재시도로 focus/blur 가 잠깐 오갈 수 있어 마지막 상태만 반영
+  if (AUTO_IME) {
+    winHwnd = ime.hwndOf(win);
+    win.on('focus', () => scheduleIme('ja'));
+    win.on('blur', () => scheduleIme('ko'));
+  }
+
   // 닫기 버튼/Alt+F4를 눌러도 종료 대신 숨김 (트레이에 살아있음)
   win.on('close', (e) => {
     if (!app.isQuiting) {
@@ -118,6 +129,13 @@ function createWindow() {
       hide();
     }
   });
+}
+
+let winHwnd = '';           // 입력기 전환용 창 핸들
+let imeTimer = null;
+function scheduleIme(lang) {
+  clearTimeout(imeTimer);
+  imeTimer = setTimeout(() => ime.set(lang, winHwnd), 120);
 }
 
 // 창 + 내부 웹페이지까지 키보드 포커스를 확실히 가져옴
@@ -225,6 +243,7 @@ app.whenReady().then(() => {
     return;
   }
   targetDisplay = pickDisplayFromArgs();
+  if (AUTO_IME) ime.start();   // 도우미 준비(수 초)는 백그라운드로, 그 전 명령은 대기 후 처리
   createWindow();
   buildTray();
 
@@ -291,6 +310,17 @@ app.whenReady().then(() => {
 // 트레이 앱이므로 모든 창이 닫혀도 종료하지 않음
 app.on('window-all-closed', (e) => { /* keep running in tray */ });
 
+// 종료 시: 한국어 입력기로 되돌린 뒤(최대 1.5초 대기) 실제 종료
+let imeRestored = false;
+app.on('before-quit', (e) => {
+  if (imeRestored || !ime.running()) return;
+  e.preventDefault();
+  imeRestored = true;
+  clearTimeout(imeTimer);
+  ime.set('ko', winHwnd).finally(() => { ime.stop(); app.quit(); });
+});
+
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  ime.stop();
 });
