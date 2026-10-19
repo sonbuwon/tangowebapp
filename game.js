@@ -1548,7 +1548,14 @@ function pickInfMean(opt, btn) {
 }
 function finishInf(correct, meanOK) {
   const w = infCur;
-  quizInfSub.textContent = `${w.kana}  ·  ${w.mean}`;
+  // 히라가나 · 뜻 을 따로 감싸 폰트 설정(글자색·크기)을 각각 적용
+  quizInfSub.textContent = "";
+  [["q-kana", w.kana], ["q-sep", "  ·  "], ["q-mean", w.mean]].forEach(([cls, text]) => {
+    const s = document.createElement("span");
+    s.className = cls;
+    s.textContent = text;
+    quizInfSub.appendChild(s);
+  });
   quizInfSub.style.visibility = "visible";
   quizInfResult.textContent = "";
   if (correct) {
@@ -1602,35 +1609,63 @@ document.getElementById("menuFontBtn").onclick = () => setView("fontSettings");
 document.getElementById("menuSpeechBtn").onclick = () => setView("speechSettings");
 document.querySelectorAll(".back-btn[data-back]").forEach(b => { b.onclick = () => setView(b.dataset.back); });
 
-/* ===== 폰트 설정: 플래시카드 글자색 (항목별, localStorage 저장) =====
-   기본값은 style.css :root 의 --fc-* 값과 같음 (지금 색 그대로) */
+/* ===== 폰트 설정: 플래시카드·시험 글자색 / 글자 크기 (항목별, localStorage 저장) =====
+   색 기본값은 style.css :root 의 --fc-* 값과 같음 (지금 색 그대로)
+   크기는 화면마다 기본 크기가 달라 배율(%)로 저장 → --fs-* (100% = 지금 크기 그대로) */
 const FONT_COLOR_KEY = "gm6_fc_colors";
-const FONT_COLORS = [
-  { key: "word",   cssVar: "--fc-word",    label: "일본어 단어",       sample: "猫",      def: "#e8e6e3" },
-  { key: "kana",   cssVar: "--fc-kana",    label: "히라가나 단어",     sample: "ねこ",     def: "#aab2c0" },
-  { key: "mean",   cssVar: "--fc-mean",    label: "단어 한국어 뜻",    sample: "고양이",   def: "#e8e6e3" },
-  { key: "exJp",   cssVar: "--fc-ex-jp",   label: "일본어 문장",       sample: "猫が好き", def: "#e8e6e3" },
-  { key: "exHira", cssVar: "--fc-ex-hira", label: "히라가나 문장",     sample: "ねこがすき", def: "#aab2c0" },
-  { key: "exKr",   cssVar: "--fc-ex-kr",   label: "문장 한국어 뜻",    sample: "고양이가 좋다", def: "#9a9a9a" },
+const FONT_SIZE_KEY = "gm6_fc_sizes";
+const FONT_SIZE_MIN = 50, FONT_SIZE_MAX = 200, FONT_SIZE_DEF = 100;
+const FONT_ITEMS = [
+  { key: "word",   colorVar: "--fc-word",    sizeVar: "--fs-word",    label: "일본어 단어",    sample: "猫",           def: "#e8e6e3" },
+  { key: "kana",   colorVar: "--fc-kana",    sizeVar: "--fs-kana",    label: "히라가나 단어",  sample: "ねこ",         def: "#aab2c0" },
+  { key: "mean",   colorVar: "--fc-mean",    sizeVar: "--fs-mean",    label: "단어 한국어 뜻", sample: "고양이",       def: "#e8e6e3" },
+  { key: "exJp",   colorVar: "--fc-ex-jp",   sizeVar: "--fs-ex-jp",   label: "일본어 문장",    sample: "猫が好き",     def: "#e8e6e3" },
+  { key: "exHira", colorVar: "--fc-ex-hira", sizeVar: "--fs-ex-hira", label: "히라가나 문장",  sample: "ねこがすき",   def: "#aab2c0" },
+  { key: "exKr",   colorVar: "--fc-ex-kr",   sizeVar: "--fs-ex-kr",   label: "문장 한국어 뜻", sample: "고양이가 좋다", def: "#9a9a9a" },
 ];
-function loadFontColors() {
-  let saved = {};
-  try { saved = JSON.parse(localStorage.getItem(FONT_COLOR_KEY) || "{}") || {}; } catch (_) {}
-  const out = {};
-  FONT_COLORS.forEach(c => { out[c.key] = /^#[0-9a-f]{6}$/i.test(saved[c.key]) ? saved[c.key] : c.def; });
-  return out;
+function readJson(key) {
+  try { return JSON.parse(localStorage.getItem(key) || "{}") || {}; } catch (_) { return {}; }
 }
-function applyFontColors(colors) {
-  FONT_COLORS.forEach(c => document.documentElement.style.setProperty(c.cssVar, colors[c.key]));
+function clampFontSize(v) {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) ? Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, n)) : FONT_SIZE_DEF;
 }
-let fontColors = loadFontColors();
-applyFontColors(fontColors);
+function defaultFont() {
+  const font = { colors: {}, sizes: {} };
+  FONT_ITEMS.forEach(c => { font.colors[c.key] = c.def; font.sizes[c.key] = FONT_SIZE_DEF; });
+  return font;
+}
+function loadFont() {
+  const colors = readJson(FONT_COLOR_KEY), sizes = readJson(FONT_SIZE_KEY);
+  const font = defaultFont();
+  FONT_ITEMS.forEach(c => {
+    if (/^#[0-9a-f]{6}$/i.test(colors[c.key])) font.colors[c.key] = colors[c.key];
+    if (sizes[c.key] != null) font.sizes[c.key] = clampFontSize(sizes[c.key]);
+  });
+  return font;
+}
+function applyFont(font) {
+  const root = document.documentElement.style;
+  FONT_ITEMS.forEach(c => {
+    root.setProperty(c.colorVar, font.colors[c.key]);
+    root.setProperty(c.sizeVar, String(font.sizes[c.key] / 100));
+  });
+}
+let fontSettings = loadFont();
+applyFont(fontSettings);
 
 const fontColorRows = document.getElementById("fontColorRows");
 const fontMsg = document.getElementById("fontMsg");
 const fontInputs = {};
-FONT_COLORS.forEach(c => {
-  const row = document.createElement("label");
+// 미리보기 글자: 고른 색 + 크기 배율 반영
+function updateFontSample(key) {
+  const { color, size, sample, sizeVal } = fontInputs[key];
+  sample.style.color = color.value;
+  sample.style.fontSize = `${(0.85 * size.value / 100).toFixed(3)}rem`;
+  sizeVal.textContent = `${size.value}%`;
+}
+FONT_ITEMS.forEach(c => {
+  const row = document.createElement("div");
   row.className = "setting-row color-row";
   const name = document.createElement("span");
   name.className = "color-name";
@@ -1638,39 +1673,55 @@ FONT_COLORS.forEach(c => {
   const sample = document.createElement("span");
   sample.className = "color-sample";
   sample.textContent = c.sample;
-  const input = document.createElement("input");
-  input.type = "color";
-  input.oninput = () => { sample.style.color = input.value; fontMsg.textContent = ""; };
-  row.append(name, sample, input);
+  const color = document.createElement("input");
+  color.type = "color";
+  color.title = "글자색";
+  // 크기 배율 슬라이더 (두 번째 줄)
+  const sizeLine = document.createElement("div");
+  sizeLine.className = "font-size-line";
+  const sizeLabel = document.createElement("span");
+  sizeLabel.textContent = "크기";
+  const size = document.createElement("input");
+  size.type = "range";
+  size.min = FONT_SIZE_MIN; size.max = FONT_SIZE_MAX; size.step = 10;
+  size.title = "글자 크기";
+  const sizeVal = document.createElement("span");
+  sizeVal.className = "rate-val";
+  sizeLine.append(sizeLabel, size, sizeVal);
+  row.append(name, sample, color, sizeLine);
   fontColorRows.appendChild(row);
-  fontInputs[c.key] = { input, sample };
+  fontInputs[c.key] = { color, size, sample, sizeVal };
+  color.oninput = size.oninput = () => { updateFontSample(c.key); fontMsg.textContent = ""; };
 });
-// 폼에 색 채우기 (저장 안 한 변경은 화면을 다시 열면 버림)
-function fillFontForm(colors) {
-  FONT_COLORS.forEach(c => {
-    const { input, sample } = fontInputs[c.key];
-    input.value = colors[c.key];
-    sample.style.color = colors[c.key];
+// 폼에 값 채우기 (저장 안 한 변경은 화면을 다시 열면 버림)
+function fillFontForm(font) {
+  FONT_ITEMS.forEach(c => {
+    fontInputs[c.key].color.value = font.colors[c.key];
+    fontInputs[c.key].size.value = font.sizes[c.key];
+    updateFontSample(c.key);
   });
 }
-function loadFontForm() { fillFontForm(fontColors); fontMsg.textContent = ""; }
-function saveFontColors(colors, msg) {
-  fontColors = colors;
-  localStorage.setItem(FONT_COLOR_KEY, JSON.stringify(fontColors));
-  applyFontColors(fontColors);
+function loadFontForm() { fillFontForm(fontSettings); fontMsg.textContent = ""; }
+function saveFont(font, msg) {
+  fontSettings = font;
+  localStorage.setItem(FONT_COLOR_KEY, JSON.stringify(font.colors));
+  localStorage.setItem(FONT_SIZE_KEY, JSON.stringify(font.sizes));
+  applyFont(font);
   fontMsg.textContent = msg;
 }
 document.getElementById("fontSaveBtn").onclick = () => {
-  const colors = {};
-  FONT_COLORS.forEach(c => { colors[c.key] = fontInputs[c.key].input.value; });
-  saveFontColors(colors, "저장되었습니다 ✓");
+  const font = { colors: {}, sizes: {} };
+  FONT_ITEMS.forEach(c => {
+    font.colors[c.key] = fontInputs[c.key].color.value;
+    font.sizes[c.key] = clampFontSize(fontInputs[c.key].size.value);
+  });
+  saveFont(font, "저장되었습니다 ✓");
 };
-// 기본값으로 되돌리기: 바로 적용·저장
+// 기본값으로 되돌리기 (색·크기 모두): 바로 적용·저장
 document.getElementById("fontDefaultBtn").onclick = () => {
-  const colors = {};
-  FONT_COLORS.forEach(c => { colors[c.key] = c.def; });
-  fillFontForm(colors);
-  saveFontColors(colors, "기본값으로 되돌렸습니다 ✓");
+  const font = defaultFont();
+  fillFontForm(font);
+  saveFont(font, "기본값으로 되돌렸습니다 ✓");
 };
 
 const optSpeech = document.getElementById("optSpeech");

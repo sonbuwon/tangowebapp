@@ -16,6 +16,13 @@
   --fc-ex-jp: #e8e6e3;
   --fc-ex-hira: #aab2c0;
   --fc-ex-kr: #9a9a9a;
+  /* 플래시카드·시험 글자 크기 배율 (1 = 기본 크기, 설정 → 폰트 에서 변경) */
+  --fs-word: 1;
+  --fs-kana: 1;
+  --fs-mean: 1;
+  --fs-ex-jp: 1;
+  --fs-ex-hira: 1;
+  --fs-ex-kr: 1;
 }
 
 html, body {
@@ -89,15 +96,22 @@ html, body {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   padding: 20px 16px; text-align: center; gap: 10px;
 }
-.quiz-word { font-size: 40px; font-weight: 700; color: var(--text); line-height: 1.3; }
+.quiz-word { font-size: calc(40px * var(--fs-word)); font-weight: 700; color: var(--fc-word); line-height: 1.3; }
 /* 역방향 출제(한자 없는 단어): 한국어 뜻을 문제로 제시 → 글자 크기 축소 + 안내 라벨 */
 .quiz-card.reverse { position: relative; }
-.quiz-card.reverse .quiz-word { font-size: 26px; word-break: keep-all; }
+.quiz-card.reverse .quiz-word { font-size: calc(26px * var(--fs-mean)); color: var(--fc-mean); word-break: keep-all; }
 .quiz-card.reverse::before {
   content: "뜻 → 히라가나"; position: absolute; top: 8px; left: 12px;
   font-size: .68rem; font-weight: 600; color: var(--sub);
 }
 .quiz-mean { font-size: 1rem; color: var(--accent); font-weight: 600; visibility: hidden; min-height: 1.2em; }
+/* 입력 테스트 보조 정보: 정방향 = 한국어 뜻, 역방향 = 히라가나 */
+#quizMean { font-size: calc(1rem * var(--fs-mean)); color: var(--fc-mean); }
+.quiz-card.reverse #quizMean { font-size: calc(1rem * var(--fs-kana)); color: var(--fc-kana); }
+/* 무한 테스트 보조 정보: 히라가나 · 한국어 뜻 */
+.quiz-mean .q-kana { font-size: calc(1rem * var(--fs-kana)); color: var(--fc-kana); }
+.quiz-mean .q-mean { font-size: calc(1rem * var(--fs-mean)); color: var(--fc-mean); }
+.quiz-mean .q-sep { color: var(--sub); }
 #quizForm { width: 100%; max-width: 360px; display: flex; gap: 8px; margin-top: 16px; }
 #quizInput {
   flex: 1; background: var(--card); color: var(--text);
@@ -121,11 +135,11 @@ html, body {
 }
 #quizResult.ok, #quizInfResult.ok { color: #7fcf9a; }
 #quizResult.err, #quizInfResult.err { color: #e06b6b; }
-#quizResult .quiz-answer { font-size: 2em; margin-top: 4px; }
-#quizResult .quiz-ex { margin-top: 10px; font-size: .95rem; font-weight: 600; line-height: 1.5; word-break: keep-all; }
-#quizResult .quiz-ex-jp { color: var(--text); }
-#quizResult .quiz-ex-hira { margin-top: 4px; color: var(--accent); }
-#quizResult .quiz-ex-kr { margin-top: 4px; color: var(--sub); }
+#quizResult .quiz-answer { font-size: calc(2em * var(--fs-kana)); margin-top: 4px; color: var(--fc-kana); }
+#quizResult .quiz-ex { margin-top: 10px; font-weight: 600; line-height: 1.5; word-break: keep-all; }
+#quizResult .quiz-ex-jp { font-size: calc(.95rem * var(--fs-ex-jp)); color: var(--fc-ex-jp); }
+#quizResult .quiz-ex-hira { margin-top: 4px; font-size: calc(.95rem * var(--fs-ex-hira)); color: var(--fc-ex-hira); }
+#quizResult .quiz-ex-kr { margin-top: 4px; font-size: calc(.95rem * var(--fs-ex-kr)); color: var(--fc-ex-kr); }
 #quizResult .quiz-speak {
   display: block; margin: 10px auto 0; padding: 5px 14px;
   border: 1px solid var(--line); border-radius: 16px;
@@ -142,7 +156,9 @@ html, body {
 #quizResult .quiz-wrong-table th,
 #quizResult .quiz-wrong-table td { padding: 6px 8px; border-bottom: 1px solid var(--sub); word-break: keep-all; }
 #quizResult .quiz-wrong-table th { color: var(--sub); font-size: 1.04rem; }
-#quizResult .quiz-wrong-table td:nth-child(2) { color: var(--accent); }
+#quizResult .quiz-wrong-table td:nth-child(1) { color: var(--fc-word); }
+#quizResult .quiz-wrong-table td:nth-child(2) { color: var(--fc-kana); }
+#quizResult .quiz-wrong-table td:nth-child(3) { color: var(--fc-mean); }
 #quizInfResult .quiz-detail { font-size: .78rem; font-weight: 600; margin-top: 4px; color: var(--sub); }
 #quizNext, #quizInfNext {
   margin-top: 12px; padding: 8px 22px;
@@ -253,6 +269,11 @@ html, body {
   display: inline-flex; align-items: center; justify-content: center;
 }
 .choice-text { min-width: 0; word-break: keep-all; }
+/* 무한 테스트 보기: 1단계 히라가나 / 2단계 한국어 뜻 (채점 후 정답·오답 색은 유지) */
+#infKanaChoices .choice-text { font-size: calc(1em * var(--fs-kana)); }
+#infMeanChoices .choice-text { font-size: calc(1em * var(--fs-mean)); }
+#infKanaChoices .choice-btn:not(.ok):not(.bad) .choice-text { color: var(--fc-kana); }
+#infMeanChoices .choice-btn:not(.ok):not(.bad) .choice-text { color: var(--fc-mean); }
 
 /* ===== 글로벌 단축키 안내 바 (하단 고정, 호버 시 표시) ===== */
 #shortcutBar {
@@ -457,6 +478,10 @@ html, body {
   width: 36px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px;
   background: none; cursor: pointer;
 }
+/* 글자 크기 배율 줄 (색 선택 아래) */
+.font-size-line { width: 100%; display: flex; align-items: center; gap: 8px; font-size: .75rem; color: var(--sub); }
+.color-row .font-size-line input[type="range"] { flex: 1; min-width: 100px; width: auto; height: auto; }
+.font-size-line .rate-val { min-width: 40px; font-size: .78rem; color: var(--sub); text-align: right; }
 #fontDefaultBtn {
   display: block; max-width: 360px; width: 100%; margin: 12px auto 0;
   padding: 8px; border: 1px solid var(--line); border-radius: 9px;
@@ -700,7 +725,7 @@ html, body {
   padding: 22px 22px 34px; display: flex; flex-direction: column; justify-content: center; align-items: center;
   box-shadow: 0 6px 20px rgba(0,0,0,.3); text-align: center;
 }
-.fc-face .big-kana { font-size: 45px; font-weight: 600; color: var(--fc-word); }
+.fc-face .big-kana { font-size: calc(45px * var(--fs-word)); font-weight: 600; color: var(--fc-word); }
 .fc-face .flip-hint { position: absolute; bottom: 14px; font-size: .72rem; color: var(--sub); }
 .fc-detail {
   position: relative;
@@ -709,14 +734,14 @@ html, body {
 }
 .flashcard.revealed .fc-detail { display: block; }
 .flashcard.revealed .flip-hint { display: none; }
-.fc-detail .big-kanji { font-size: 25px; color: var(--fc-kana); font-weight: 700; margin-bottom: 8px; }
-.fc-detail .big-mean { font-size: 20px; color: var(--fc-mean); }
+.fc-detail .big-kanji { font-size: calc(25px * var(--fs-kana)); color: var(--fc-kana); font-weight: 700; margin-bottom: 8px; }
+.fc-detail .big-mean { font-size: calc(20px * var(--fs-mean)); color: var(--fc-mean); }
 /* 예문: 기본 숨김. .show-ex(체크박스) 가 붙고 내용이 있을 때만 표시 */
 .fc-ex { display: none; font-size: .95rem; line-height: 1.5; word-break: keep-all; }
 .flashcard.show-ex .fc-ex:not(:empty) { display: block; }
-.fc-ex-jp { margin-top: 12px; color: var(--fc-ex-jp); }
-.fc-ex-hira { margin-top: 12px; color: var(--fc-ex-hira); }
-.fc-ex-kr { margin-top: 4px; color: var(--fc-ex-kr); }
+.fc-ex-jp { margin-top: 12px; font-size: calc(.95rem * var(--fs-ex-jp)); color: var(--fc-ex-jp); }
+.fc-ex-hira { margin-top: 12px; font-size: calc(.95rem * var(--fs-ex-hira)); color: var(--fc-ex-hira); }
+.fc-ex-kr { margin-top: 4px; font-size: calc(.95rem * var(--fs-ex-kr)); color: var(--fc-ex-kr); }
 /* 섞기 버튼 아래 '예문 보기' 체크박스 */
 .flash-opt {
   margin-top: 12px; display: inline-flex; align-items: center; gap: 6px;
