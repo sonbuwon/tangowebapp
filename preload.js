@@ -242,6 +242,8 @@ contextBridge.exposeInMainWorld('boss', {
   onFitHeight: (cb) => ipcRenderer.on('fitHeight', (_e, on) => cb(on)),
   // 메인 프로세스가 보낸 화면 전환 신호 ('home' | 'vocab' | 'flash' | 'quiz' | 'settings')
   onView: (cb) => ipcRenderer.on('view', (_e, v) => cb(v)),
+  // 타이머 시작 (초) → 메인이 본 창 아래에 타이머 창을 띄움
+  timerStart: (sec) => ipcRenderer.send('timer:start', sec),
   // 구글 음성(온라인) MP3 받아오기 → Promise<Uint8Array|null>
   tts: (text) => ipcRenderer.invoke('boss:tts', text),
   // words.csv 에서 읽어온 단어 목록

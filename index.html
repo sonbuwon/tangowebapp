@@ -116,6 +116,24 @@
     <div class="settings-wrap">
       <button type="button" class="menu-btn" id="menuWordBtn">단어 관련</button>
       <button type="button" class="menu-btn" id="menuSettingsBtn">설정</button>
+      <button type="button" class="menu-btn" id="menuTimerBtn">타이머</button>
+    </div>
+  </div>
+
+  <!-- ===== 타이머 화면 (설정 메뉴 → 타이머) — 시:분:초 설정 후 시작 → 본 창 아래 타이머 창 ===== -->
+  <div id="timerScreen" class="screen" style="display:none">
+    <div class="settings-wrap">
+      <button type="button" class="back-btn" data-back="settings">← 뒤로</button>
+      <form id="timerForm" class="setting-row timer-form" autocomplete="off">
+        <input type="text" id="timerH" class="timer-num" inputmode="numeric" maxlength="2" />
+        <span class="timer-sep">:</span>
+        <input type="text" id="timerM" class="timer-num" inputmode="numeric" maxlength="2" />
+        <span class="timer-sep">:</span>
+        <input type="text" id="timerS" class="timer-num" inputmode="numeric" maxlength="2" />
+        <div class="timer-labels"><span>시간</span><span>분</span><span>초</span></div>
+      </form>
+      <button type="submit" form="timerForm" id="timerStartBtn" class="settings-save">시작</button>
+      <div id="timerMsg" class="settings-msg"></div>
     </div>
   </div>
 

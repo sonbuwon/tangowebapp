@@ -18,6 +18,9 @@ const KEY_QUIZ   = 'Alt+4';           // 시험 화면으로 전환
 const KEY_INPUT  = 'Alt+5';           // 설정 메뉴 화면으로 전환 (단어 관련 / 설정)
 
 const AUTO_IME = true;      // 창 포커스 시 일본어(히라가나), 숨김·다른 창·종료 시 한국어 입력기로 자동 전환
+
+const TIMER_H = 56;         // 타이머 창 높이(px) — 너비는 본 창과 같음
+const TIMER_GAP = 8;        // 본 창과 타이머 창 사이 간격(px)
 // ───────────────────────────────────────────────────────────────
 
 // 구글 음성 요청 1회당 글자 수 제한(약 200자) → 문장부호 기준으로 나눔
@@ -122,6 +125,13 @@ function createWindow() {
     win.on('blur', () => scheduleIme('ko'));
   }
 
+  // 타이머 창은 본 창과 한 몸: 움직이거나 크기가 바뀌면 바로 따라감,
+  // 이동·크기 조절이 끝났을 때 아래 공간이 모자라면 본 창을 위로 밀어 올림
+  win.on('move', positionTimer);
+  win.on('resize', positionTimer);
+  win.on('moved', () => { fitMainForTimer(); positionTimer(); });
+  win.on('resized', () => { fitMainForTimer(); positionTimer(); });
+
   // 닫기 버튼/Alt+F4를 눌러도 종료 대신 숨김 (트레이에 살아있음)
   win.on('close', (e) => {
     if (!app.isQuiting) {
@@ -152,6 +162,7 @@ function show() {
   if (!win) return;
   win.show();          // 마지막 위치 그대로 복구 (모서리 배치는 최초 생성 시 1회만)
   visible = true;
+  showTimerWin();      // 타이머가 켜져 있으면 함께 표시
   grabFocus();
   // Windows 가 포커스 이동을 막는 경우가 있어 잠깐 뒤에 몇 번 더 확인·재시도
   [50, 150, 300].forEach((ms) => setTimeout(() => {
@@ -165,7 +176,151 @@ function show() {
 function hide() {
   if (!win) return;
   win.hide();
+  if (timerWin) timerWin.hide();   // 타이머 창도 함께 숨김 (시간은 계속 흐름)
   visible = false;
+}
+
+// ── 타이머 (Alt+5 → 타이머) ──────────────────────────────────────
+// 본 창 아래 TIMER_GAP 만큼 띄운 작은 창. 포커스를 가져가지 않아 본 창 키 입력·입력기 전환에 영향 없음.
+// 시간은 메인 프로세스에서 종료 시각 기준으로 계산 → 창이 숨겨져 있어도 정확함.
+// state: 'running' | 'paused' | 'stopped'(설정 시간으로 되돌려 멈춤) | 'done'(00:00:00)
+let timerWin = null;
+const timer = { duration: 0, remaining: 0, endAt: 0, state: 'stopped' };
+let timerTick = null;
+let timerLastSec = -1;
+
+function timerReserve() { return timerWin ? TIMER_H + TIMER_GAP : 0; }
+
+// 본 창 아래에 타이머 자리가 없으면 본 창을 위로 밀어 올림 (그래도 모자라면 높이를 줄임)
+function fitMainForTimer() {
+  if (!timerWin || !win || win.isDestroyed()) return;
+  const b = win.getBounds();
+  const { workArea } = screen.getDisplayMatching(b);
+  const bottom = workArea.y + workArea.height - timerReserve();   // 본 창이 내려올 수 있는 한계
+  const height = Math.min(b.height, Math.max(200, bottom - workArea.y));
+  const y = Math.max(workArea.y, Math.min(b.y, bottom - height));
+  if (y === b.y && height === b.height) return;
+  settingBounds = true;   // 세로 늘리기 상태가 풀리지 않게
+  try { win.setBounds({ x: b.x, y, width: b.width, height }); } finally { settingBounds = false; }
+}
+
+function positionTimer() {
+  if (!timerWin || !win || win.isDestroyed()) return;
+  const b = win.getBounds();
+  timerWin.setBounds({ x: b.x, y: b.y + b.height + TIMER_GAP, width: b.width, height: TIMER_H });
+}
+
+function showTimerWin() {
+  if (!timerWin || !visible) return;
+  fitMainForTimer();
+  positionTimer();
+  timerWin.setAlwaysOnTop(true, 'screen-saver');
+  timerWin.showInactive();   // 포커스는 본 창에 그대로
+}
+
+function createTimerWin() {
+  timerWin = new BrowserWindow({
+    width: WIN_W,
+    height: TIMER_H,
+    frame: false,
+    resizable: false,
+    movable: false,        // 따로 옮길 수 없음 (본 창을 따라서만 움직임)
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    focusable: false,      // 클릭해도 본 창의 포커스를 뺏지 않음
+    skipTaskbar: true,
+    show: false,
+    alwaysOnTop: true,
+    backgroundColor: '#1a1c20',
+    webPreferences: {
+      preload: path.join(__dirname, 'timer-preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  timerWin.loadFile('timer.html');
+  timerWin.webContents.on('did-finish-load', () => sendTimerState(true));
+  timerWin.on('closed', () => { timerWin = null; });
+}
+
+function timerRemaining() {
+  return timer.state === 'running' ? Math.max(0, timer.endAt - Date.now()) : timer.remaining;
+}
+
+// 타이머 창에 상태 전송 (초가 바뀌었거나 상태가 바뀐 경우)
+function sendTimerState(force) {
+  if (!timerWin || timerWin.isDestroyed()) return;
+  const sec = Math.ceil(timerRemaining() / 1000);
+  if (!force && sec === timerLastSec) return;
+  timerLastSec = sec;
+  timerWin.webContents.send('timer:state', { sec, state: timer.state });
+}
+
+function runTimerTick() {
+  clearInterval(timerTick);
+  timerTick = null;
+  if (timer.state !== 'running') return;
+  timerTick = setInterval(() => {
+    if (timer.state === 'running' && timerRemaining() <= 0) {
+      timer.state = 'done';             // 00:00:00 에서 멈춤 (다른 알림 없음)
+      timer.remaining = 0;
+      clearInterval(timerTick);
+      timerTick = null;
+      sendTimerState(true);
+      return;
+    }
+    sendTimerState(false);
+  }, 200);
+}
+
+function setTimerState(state) {
+  if (state === 'running') {
+    timer.endAt = Date.now() + timer.remaining;
+  } else if (timer.state === 'running') {
+    timer.remaining = timerRemaining();
+  }
+  timer.state = state;
+  runTimerTick();
+  sendTimerState(true);
+}
+
+function startTimer(sec) {
+  const ms = Math.round(Number(sec) || 0) * 1000;
+  if (ms <= 0) return;
+  timer.duration = ms;
+  timer.remaining = ms;
+  timer.state = 'stopped';
+  if (!timerWin) createTimerWin();
+  setTimerState('running');
+  showTimerWin();
+}
+
+function closeTimer() {
+  clearInterval(timerTick);
+  timerTick = null;
+  timer.state = 'stopped';
+  if (timerWin && !timerWin.isDestroyed()) timerWin.destroy();
+  timerWin = null;
+}
+
+// 타이머 창 버튼
+function timerAction(action) {
+  if (!timerWin) return;
+  if (action === 'toggle') {                 // 일시정지 ↔ 계속
+    if (timer.state === 'running') setTimerState('paused');
+    else if (timer.remaining > 0) setTimerState('running');
+  } else if (action === 'restart') {         // 설정한 시간부터 다시
+    timer.remaining = timer.duration;
+    timer.state = 'stopped';
+    setTimerState('running');
+  } else if (action === 'stop') {            // 1회: 설정 시간으로 되돌려 멈춤 / 정지 상태에서 1회 더: 타이머 끄기
+    if (timer.state === 'stopped') { closeTimer(); return; }
+    timer.state = 'stopped';
+    timer.remaining = timer.duration;
+    runTimerTick();
+    sendTimerState(true);
+  }
 }
 
 function toggle() {
@@ -192,7 +347,9 @@ function toggleFitHeight() {
     } else {
       const cur = win.getBounds();
       if (fitLevel === 0) fitState = cur;
-      const { workArea } = screen.getDisplayMatching(cur);
+      const area = screen.getDisplayMatching(cur).workArea;
+      // 타이머가 켜져 있으면 아래 타이머 창 자리(높이 + 간격)를 빼고 늘림
+      const workArea = { y: area.y, height: area.height - timerReserve() };
       if (fitLevel === 0) {
         const h = Math.round(cur.height + (workArea.height - cur.height) * FIT_MID_RATIO);
         // 가로 위치는 그대로, 세로는 작업 영역 중앙에 맞춰 위아래로 늘림
@@ -265,6 +422,9 @@ app.whenReady().then(() => {
   ipcMain.on('boss:hide', hide);
   // 제목 표시줄 '세로 늘리기' 버튼 → 다음 단계로 바꾼 뒤 현재 단계(0=기본, 1=좀 더 길게, 2=꽉 채움) 반환
   ipcMain.handle('boss:fitHeight', () => toggleFitHeight());
+  // 타이머: 본 창 설정 화면의 '시작' (초 단위) / 타이머 창 버튼 ('toggle' | 'restart' | 'stop')
+  ipcMain.on('timer:start', (_e, sec) => startTimer(sec));
+  ipcMain.on('timer:action', (_e, action) => timerAction(action));
   // 전체 단어 JSON 내보내기: 저장 위치를 물어본 뒤 파일로 기록 → { ok, path } / { ok:false, canceled } / { ok:false, error }
   ipcMain.handle('boss:exportJson', async (_e, text, defaultName) => {
     try {

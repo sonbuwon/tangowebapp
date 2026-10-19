@@ -488,6 +488,19 @@ html, body {
   background: var(--card); color: var(--sub); font-size: .82rem; cursor: pointer;
 }
 #fontDefaultBtn:hover { border-color: var(--accent); color: var(--text); }
+/* 타이머 설정: 시 : 분 : 초 입력 */
+.timer-form { justify-content: center; gap: 6px; cursor: default; }
+.timer-form .timer-num {
+  width: 64px; height: auto; padding: 8px 4px;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); color: var(--text);
+  font-size: 1.6rem; font-weight: 700; text-align: center; cursor: text;
+  font-variant-numeric: tabular-nums;
+}
+.timer-form .timer-num:focus { outline: none; border-color: var(--accent); }
+.timer-sep { font-size: 1.4rem; font-weight: 700; color: var(--sub); }
+.timer-labels { width: 100%; display: flex; justify-content: center; gap: 22px; font-size: .72rem; color: var(--sub); }
+.timer-labels span { width: 64px; text-align: center; }
 #settingsSaveBtn, .settings-save {
   display: block; max-width: 360px; width: 100%; margin: 16px auto 0;
   padding: 9px; border: 1px solid var(--accent); border-radius: 9px;

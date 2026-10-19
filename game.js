@@ -1604,6 +1604,7 @@ document.getElementById("quizInfEndBtn").onclick = showQuizPicker;   // 시험 �
 /* ===== 설정 메뉴 (Alt+5) → '단어 관련'(단어 입력 화면) / '설정'(앱 설정 화면) ===== */
 document.getElementById("menuWordBtn").onclick = () => setView("input");
 document.getElementById("menuSettingsBtn").onclick = () => setView("appSettings");
+document.getElementById("menuTimerBtn").onclick = () => setView("timer");
 // 설정 → '폰트' / '음성' 하위 화면
 document.getElementById("menuFontBtn").onclick = () => setView("fontSettings");
 document.getElementById("menuSpeechBtn").onclick = () => setView("speechSettings");
@@ -1724,6 +1725,46 @@ document.getElementById("fontDefaultBtn").onclick = () => {
   saveFont(font, "기본값으로 되돌렸습니다 ✓");
 };
 
+/* ===== 타이머 (설정 메뉴 → 타이머) =====
+   시:분:초 를 정해 '시작' → 메인 프로세스가 본 창 아래에 타이머 창을 띄워 동작.
+   마지막으로 정한 시간은 localStorage 에 기억 */
+const TIMER_KEY = "gm6_timer_hms";
+const timerInputs = ["timerH", "timerM", "timerS"].map(id => document.getElementById(id));
+const TIMER_MAX = [99, 59, 59];
+const timerMsg = document.getElementById("timerMsg");
+// 전각 숫자(일본어 입력기) → 반각, 숫자 외 제거, 범위 제한
+function timerNum(input, i) {
+  const s = input.value.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/\D/g, "");
+  return Math.min(TIMER_MAX[i], Number(s) || 0);
+}
+function fillTimerForm(hms) {
+  timerInputs.forEach((input, i) => { input.value = String(hms[i] || 0).padStart(2, "0"); });
+}
+function loadTimerForm() {
+  let hms = [0, 25, 0];
+  try {
+    const saved = JSON.parse(localStorage.getItem(TIMER_KEY) || "null");
+    if (Array.isArray(saved) && saved.length === 3) hms = saved.map(Number);
+  } catch (_) {}
+  fillTimerForm(hms);
+  timerMsg.textContent = "";
+}
+timerInputs.forEach((input, i) => {
+  input.addEventListener("focus", () => input.select());
+  input.addEventListener("blur", () => { input.value = String(timerNum(input, i)).padStart(2, "0"); });
+  input.addEventListener("input", () => { timerMsg.textContent = ""; });
+});
+document.getElementById("timerForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const hms = timerInputs.map(timerNum);
+  fillTimerForm(hms);
+  const sec = hms[0] * 3600 + hms[1] * 60 + hms[2];
+  if (sec <= 0) { timerMsg.textContent = "시간을 1초 이상으로 정해 주세요."; return; }
+  localStorage.setItem(TIMER_KEY, JSON.stringify(hms));
+  window.boss?.timerStart(sec);
+  timerMsg.textContent = "타이머를 시작했습니다 ✓";
+});
+
 const optSpeech = document.getElementById("optSpeech");
 const settingsMsg = document.getElementById("settingsMsg");
 // 설정 화면 열 때: 저장된 값으로 체크 상태 복원 (저장 안 한 변경은 버림)
@@ -1784,15 +1825,15 @@ document.getElementById("settingsSaveBtn").onclick = () => {
 const SCREENS = {
   home: "homeScreen", vocab: "vocabScreen", flash: "vocabScreen", quiz: "quizScreen",
   settings: "settingsMenuScreen", input: "inputScreen", appSettings: "appSettingsScreen",
-  fontSettings: "fontSettingsScreen", speechSettings: "speechSettingsScreen",
+  fontSettings: "fontSettingsScreen", speechSettings: "speechSettingsScreen", timer: "timerScreen",
 };
 const TITLES  = {
   home: "홈", vocab: "単語", flash: "単語", quiz: "試験", settings: "設定", input: "単語追加", appSettings: "設定",
-  fontSettings: "フォント", speechSettings: "音声",
+  fontSettings: "フォント", speechSettings: "音声", timer: "タイマー",
 };
 const ALL_SCREENS = [
   "homeScreen", "vocabScreen", "quizScreen", "settingsMenuScreen", "inputScreen", "appSettingsScreen",
-  "fontSettingsScreen", "speechSettingsScreen",
+  "fontSettingsScreen", "speechSettingsScreen", "timerScreen",
 ];
 let curView = "home";
 function setView(view) {
@@ -1818,6 +1859,7 @@ function setView(view) {
   else if (view === "quiz") showQuizPicker();              // 시험 범위 선택부터
   else if (view === "speechSettings") loadSettingsForm();  // 저장된 음성 설정값 표시
   else if (view === "fontSettings") loadFontForm();        // 저장된 글자색 표시
+  else if (view === "timer") loadTimerForm();              // 마지막으로 정한 시간 표시
 }
 window.boss?.onView(setView);
 
