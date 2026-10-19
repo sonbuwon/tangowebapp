@@ -9,6 +9,13 @@
   --text: #e8e6e3;
   --sub: #9a9a9a;
   --line: #3a3d44;
+  /* 플래시카드 글자색 (설정 → 폰트 에서 변경, game.js 가 덮어씀) */
+  --fc-word: #e8e6e3;
+  --fc-kana: #aab2c0;
+  --fc-mean: #e8e6e3;
+  --fc-ex-jp: #e8e6e3;
+  --fc-ex-hira: #aab2c0;
+  --fc-ex-kr: #9a9a9a;
 }
 
 html, body {
@@ -441,14 +448,29 @@ html, body {
 }
 #ttsPreviewBtn:hover { border-color: var(--accent); }
 #ttsPreviewBtn.speaking { border-color: var(--accent); background: var(--accent-soft); }
-#settingsSaveBtn {
+/* 폰트 설정: 글자색 행 (이름 · 미리보기 · 색 선택) */
+.setting-title { max-width: 360px; margin: 0 auto 10px; font-size: .85rem; font-weight: 700; color: var(--text); }
+.color-row { margin-top: 8px; cursor: default; }
+.color-row .color-name { flex: 1; font-size: .85rem; }
+.color-row .color-sample { font-size: .85rem; font-weight: 600; }
+.color-row input[type="color"] {
+  width: 36px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px;
+  background: none; cursor: pointer;
+}
+#fontDefaultBtn {
+  display: block; max-width: 360px; width: 100%; margin: 12px auto 0;
+  padding: 8px; border: 1px solid var(--line); border-radius: 9px;
+  background: var(--card); color: var(--sub); font-size: .82rem; cursor: pointer;
+}
+#fontDefaultBtn:hover { border-color: var(--accent); color: var(--text); }
+#settingsSaveBtn, .settings-save {
   display: block; max-width: 360px; width: 100%; margin: 16px auto 0;
   padding: 9px; border: 1px solid var(--accent); border-radius: 9px;
   background: var(--accent-soft); color: var(--text);
   font-size: .86rem; font-weight: 700; cursor: pointer;
 }
-#settingsSaveBtn:hover { background: var(--accent-light); }
-#settingsMsg { max-width: 360px; margin: 10px auto 0; min-height: 20px; font-size: .82rem; text-align: center; font-weight: 600; color: #7fcf9a; }
+#settingsSaveBtn:hover, .settings-save:hover { background: var(--accent-light); }
+#settingsMsg, .settings-msg { max-width: 360px; margin: 10px auto 0; min-height: 20px; font-size: .82rem; text-align: center; font-weight: 600; color: #7fcf9a; }
 
 #inputWrap { flex: 1; overflow-y: auto; padding: 20px 18px; }
 #inputWrap::-webkit-scrollbar { width: 8px; }
@@ -678,7 +700,7 @@ html, body {
   padding: 22px 22px 34px; display: flex; flex-direction: column; justify-content: center; align-items: center;
   box-shadow: 0 6px 20px rgba(0,0,0,.3); text-align: center;
 }
-.fc-face .big-kana { font-size: 45px; font-weight: 600; }
+.fc-face .big-kana { font-size: 45px; font-weight: 600; color: var(--fc-word); }
 .fc-face .flip-hint { position: absolute; bottom: 14px; font-size: .72rem; color: var(--sub); }
 .fc-detail {
   position: relative;
@@ -687,14 +709,14 @@ html, body {
 }
 .flashcard.revealed .fc-detail { display: block; }
 .flashcard.revealed .flip-hint { display: none; }
-.fc-detail .big-kanji { font-size: 25px; color: var(--accent); font-weight: 700; margin-bottom: 8px; }
-.fc-detail .big-mean { font-size: 20px; }
+.fc-detail .big-kanji { font-size: 25px; color: var(--fc-kana); font-weight: 700; margin-bottom: 8px; }
+.fc-detail .big-mean { font-size: 20px; color: var(--fc-mean); }
 /* 예문: 기본 숨김. .show-ex(체크박스) 가 붙고 내용이 있을 때만 표시 */
 .fc-ex { display: none; font-size: .95rem; line-height: 1.5; word-break: keep-all; }
 .flashcard.show-ex .fc-ex:not(:empty) { display: block; }
-.fc-ex-jp { margin-top: 12px; color: var(--text); }
-.fc-ex-hira { margin-top: 12px; color: var(--accent); }
-.fc-ex-kr { margin-top: 4px; color: var(--sub); }
+.fc-ex-jp { margin-top: 12px; color: var(--fc-ex-jp); }
+.fc-ex-hira { margin-top: 12px; color: var(--fc-ex-hira); }
+.fc-ex-kr { margin-top: 4px; color: var(--fc-ex-kr); }
 /* 섞기 버튼 아래 '예문 보기' 체크박스 */
 .flash-opt {
   margin-top: 12px; display: inline-flex; align-items: center; gap: 6px;

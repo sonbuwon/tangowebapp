@@ -1597,7 +1597,82 @@ document.getElementById("quizInfEndBtn").onclick = showQuizPicker;   // 시험 �
 /* ===== 설정 메뉴 (Alt+5) → '단어 관련'(단어 입력 화면) / '설정'(앱 설정 화면) ===== */
 document.getElementById("menuWordBtn").onclick = () => setView("input");
 document.getElementById("menuSettingsBtn").onclick = () => setView("appSettings");
+// 설정 → '폰트' / '음성' 하위 화면
+document.getElementById("menuFontBtn").onclick = () => setView("fontSettings");
+document.getElementById("menuSpeechBtn").onclick = () => setView("speechSettings");
 document.querySelectorAll(".back-btn[data-back]").forEach(b => { b.onclick = () => setView(b.dataset.back); });
+
+/* ===== 폰트 설정: 플래시카드 글자색 (항목별, localStorage 저장) =====
+   기본값은 style.css :root 의 --fc-* 값과 같음 (지금 색 그대로) */
+const FONT_COLOR_KEY = "gm6_fc_colors";
+const FONT_COLORS = [
+  { key: "word",   cssVar: "--fc-word",    label: "일본어 단어",       sample: "猫",      def: "#e8e6e3" },
+  { key: "kana",   cssVar: "--fc-kana",    label: "히라가나 단어",     sample: "ねこ",     def: "#aab2c0" },
+  { key: "mean",   cssVar: "--fc-mean",    label: "단어 한국어 뜻",    sample: "고양이",   def: "#e8e6e3" },
+  { key: "exJp",   cssVar: "--fc-ex-jp",   label: "일본어 문장",       sample: "猫が好き", def: "#e8e6e3" },
+  { key: "exHira", cssVar: "--fc-ex-hira", label: "히라가나 문장",     sample: "ねこがすき", def: "#aab2c0" },
+  { key: "exKr",   cssVar: "--fc-ex-kr",   label: "문장 한국어 뜻",    sample: "고양이가 좋다", def: "#9a9a9a" },
+];
+function loadFontColors() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(FONT_COLOR_KEY) || "{}") || {}; } catch (_) {}
+  const out = {};
+  FONT_COLORS.forEach(c => { out[c.key] = /^#[0-9a-f]{6}$/i.test(saved[c.key]) ? saved[c.key] : c.def; });
+  return out;
+}
+function applyFontColors(colors) {
+  FONT_COLORS.forEach(c => document.documentElement.style.setProperty(c.cssVar, colors[c.key]));
+}
+let fontColors = loadFontColors();
+applyFontColors(fontColors);
+
+const fontColorRows = document.getElementById("fontColorRows");
+const fontMsg = document.getElementById("fontMsg");
+const fontInputs = {};
+FONT_COLORS.forEach(c => {
+  const row = document.createElement("label");
+  row.className = "setting-row color-row";
+  const name = document.createElement("span");
+  name.className = "color-name";
+  name.textContent = c.label;
+  const sample = document.createElement("span");
+  sample.className = "color-sample";
+  sample.textContent = c.sample;
+  const input = document.createElement("input");
+  input.type = "color";
+  input.oninput = () => { sample.style.color = input.value; fontMsg.textContent = ""; };
+  row.append(name, sample, input);
+  fontColorRows.appendChild(row);
+  fontInputs[c.key] = { input, sample };
+});
+// 폼에 색 채우기 (저장 안 한 변경은 화면을 다시 열면 버림)
+function fillFontForm(colors) {
+  FONT_COLORS.forEach(c => {
+    const { input, sample } = fontInputs[c.key];
+    input.value = colors[c.key];
+    sample.style.color = colors[c.key];
+  });
+}
+function loadFontForm() { fillFontForm(fontColors); fontMsg.textContent = ""; }
+function saveFontColors(colors, msg) {
+  fontColors = colors;
+  localStorage.setItem(FONT_COLOR_KEY, JSON.stringify(fontColors));
+  applyFontColors(fontColors);
+  fontMsg.textContent = msg;
+}
+document.getElementById("fontSaveBtn").onclick = () => {
+  const colors = {};
+  FONT_COLORS.forEach(c => { colors[c.key] = fontInputs[c.key].input.value; });
+  saveFontColors(colors, "저장되었습니다 ✓");
+};
+// 기본값으로 되돌리기: 바로 적용·저장
+document.getElementById("fontDefaultBtn").onclick = () => {
+  const colors = {};
+  FONT_COLORS.forEach(c => { colors[c.key] = c.def; });
+  fillFontForm(colors);
+  saveFontColors(colors, "기본값으로 되돌렸습니다 ✓");
+};
+
 const optSpeech = document.getElementById("optSpeech");
 const settingsMsg = document.getElementById("settingsMsg");
 // 설정 화면 열 때: 저장된 값으로 체크 상태 복원 (저장 안 한 변경은 버림)
@@ -1658,9 +1733,16 @@ document.getElementById("settingsSaveBtn").onclick = () => {
 const SCREENS = {
   home: "homeScreen", vocab: "vocabScreen", flash: "vocabScreen", quiz: "quizScreen",
   settings: "settingsMenuScreen", input: "inputScreen", appSettings: "appSettingsScreen",
+  fontSettings: "fontSettingsScreen", speechSettings: "speechSettingsScreen",
 };
-const TITLES  = { home: "홈", vocab: "単語", flash: "単語", quiz: "試験", settings: "設定", input: "単語追加", appSettings: "設定" };
-const ALL_SCREENS = ["homeScreen", "vocabScreen", "quizScreen", "settingsMenuScreen", "inputScreen", "appSettingsScreen"];
+const TITLES  = {
+  home: "홈", vocab: "単語", flash: "単語", quiz: "試験", settings: "設定", input: "単語追加", appSettings: "設定",
+  fontSettings: "フォント", speechSettings: "音声",
+};
+const ALL_SCREENS = [
+  "homeScreen", "vocabScreen", "quizScreen", "settingsMenuScreen", "inputScreen", "appSettingsScreen",
+  "fontSettingsScreen", "speechSettingsScreen",
+];
 let curView = "home";
 function setView(view) {
   if (!SCREENS[view]) return;
@@ -1683,7 +1765,8 @@ function setView(view) {
   else if (view === "flash") setMode("flash");             // 플래시카드 모드로 전환
   else if (view === "vocab") setMode("list");              // 목록 모드로 전환
   else if (view === "quiz") showQuizPicker();              // 시험 범위 선택부터
-  else if (view === "appSettings") loadSettingsForm();     // 저장된 설정값 표시
+  else if (view === "speechSettings") loadSettingsForm();  // 저장된 음성 설정값 표시
+  else if (view === "fontSettings") loadFontForm();        // 저장된 글자색 표시
 }
 window.boss?.onView(setView);
 

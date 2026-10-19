@@ -119,10 +119,31 @@
     </div>
   </div>
 
-  <!-- ===== 설정 화면 (설정 메뉴 → 설정) ===== -->
+  <!-- ===== 설정 화면 (설정 메뉴 → 설정) — '폰트' / '음성' 목록 ===== -->
   <div id="appSettingsScreen" class="screen" style="display:none">
     <div class="settings-wrap">
       <button type="button" class="back-btn" data-back="settings">← 뒤로</button>
+      <button type="button" class="menu-btn" id="menuFontBtn">폰트</button>
+      <button type="button" class="menu-btn" id="menuSpeechBtn">음성</button>
+    </div>
+  </div>
+
+  <!-- ===== 폰트 설정 화면 (설정 → 폰트) — 플래시카드 글자색 ===== -->
+  <div id="fontSettingsScreen" class="screen" style="display:none">
+    <div class="settings-wrap">
+      <button type="button" class="back-btn" data-back="appSettings">← 뒤로</button>
+      <div class="setting-title">플래시카드 글자색</div>
+      <div id="fontColorRows"></div>
+      <button type="button" id="fontDefaultBtn">기본값으로 되돌리기</button>
+      <button type="button" id="fontSaveBtn" class="settings-save">저장</button>
+      <div id="fontMsg" class="settings-msg"></div>
+    </div>
+  </div>
+
+  <!-- ===== 음성 설정 화면 (설정 → 음성) ===== -->
+  <div id="speechSettingsScreen" class="screen" style="display:none">
+    <div class="settings-wrap">
+      <button type="button" class="back-btn" data-back="appSettings">← 뒤로</button>
       <label class="setting-row"><input type="checkbox" id="optSpeech" /> 음성 기능 <span class="setting-desc">플래시카드 🔊 읽어주기 버튼 (S·D 키)</span></label>
       <div class="setting-row setting-select">
         <span>음성 종류</span>
@@ -143,8 +164,8 @@
         <span id="optTtsRateVal" class="rate-val"></span>
         <button type="button" id="ttsPreviewBtn" title="저장 전 설정으로 들어보기">🔊 미리 들어보기</button>
       </div>
-      <button type="button" id="settingsSaveBtn">저장</button>
-      <div id="settingsMsg"></div>
+      <button type="button" id="settingsSaveBtn" class="settings-save">저장</button>
+      <div id="settingsMsg" class="settings-msg"></div>
     </div>
   </div>
 
