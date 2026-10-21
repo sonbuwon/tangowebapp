@@ -481,6 +481,12 @@ document.addEventListener("keydown", e => {
     if ((e.key === "b" || e.key === "B") && infStep === 2) { quizInfBookmark.click(); return; }
     return;
   }
+  // 입력 테스트 채점 후: S → 단어 듣기, D → 예문 듣기 (답 입력 중에는 동작 안 함)
+  if (curView === "quiz" && quizAnswered && /^[sdSD]$/.test(e.key) && !e.ctrlKey && !e.altKey) {
+    const b = quizResult.querySelector(`.quiz-speak[data-key="${e.key.toLowerCase()}"]`);
+    if (b && b.offsetParent) { e.preventDefault(); b.click(); }   // 화면에 보일 때만 (다른 시험 화면으로 나간 경우 제외)
+    return;
+  }
   // 아래 플래시카드 조작키는 단어장 화면·플래시카드 모드에서만
   if (curView !== "vocab" || curMode !== "flash") return;
   if (e.key === "ArrowRight") next();
@@ -1115,11 +1121,12 @@ quizForm.addEventListener("submit", (e) => {
   if (speechOn && (wordText(w) || exText(w))) {
     const speakRow = document.createElement("div");
     speakRow.className = "quiz-speak-row";
-    [["🔊 단어 듣기", wordText(w)], ["🔊 예문 듣기", exText(w)]].forEach(([label, text]) => {
+    [["🔊 단어 듣기 (S)", wordText(w), "s"], ["🔊 예문 듣기 (D)", exText(w), "d"]].forEach(([label, text, key]) => {
       if (!text) return;
       const speakBtn = document.createElement("button");
       speakBtn.type = "button";
       speakBtn.className = "quiz-speak";
+      speakBtn.dataset.key = key;                           // S/D 단축키로 누르기
       speakBtn.textContent = label;
       speakBtn.onclick = () => {
         speakText(text, speakBtn);
