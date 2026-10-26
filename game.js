@@ -1,9 +1,16 @@
-/* 데이터: words.csv 에서 로드 (preload.js 가 읽어 window.boss.words 로 전달)
-   각 항목: { row(오십음 행), kana(히라가나), kanji, mean(한국어 뜻),
-            ex?:{ jp(한자문장), hira(히라가나문장), kr(한국어해석) } }
-   ▶ 단어 추가/수정은 words.csv 파일을 편집하세요. */
-// window.boss.words 는 contextBridge 로 노출된 읽기 전용 배열 → 항목까지 복사해 수정 가능한 사본 사용 (단어 수정 시 제자리 갱신)
-const WORDS = ((window.boss && window.boss.words) || []).map(w => w.ex ? { ...w, ex: { ...w.ex } } : { ...w });
+/* 데이터: 앱 데이터 폴더의 words.json 에서 로드 (preload.js 가 읽어 window.boss.data 로 전달)
+   단어 항목: { id(고유 번호), row(오십음 행), kana(히라가나), kanji, mean(한국어 뜻), list(주제),
+               ex?:{ jp(한자문장), hira(히라가나문장), kr(한국어해석) } }
+   북마크(단어 ID)·주제 생성 시각·주제 순서도 같은 파일에 저장된다.
+   ▶ 단어 추가는 CSV 가져오기 / 개별 단어 추가, 수정은 단어장의 ✎ 버튼으로. */
+const DATA = (window.boss && window.boss.data) || {};
+// contextBridge 로 넘어온 값은 읽기 전용 → 항목까지 복사해 수정 가능한 사본 사용 (단어 수정 시 제자리 갱신)
+function copyWord(w) { return w.ex ? { ...w, ex: { ...w.ex } } : { ...w }; }
+const WORDS = (DATA.words || []).map(copyWord);
+// 저장 실패는 화면 동작을 막지 않도록 콘솔에만 남김 (단어 추가·수정·삭제는 각 화면에서 메시지 표시)
+function logSaveError(what, res) {
+  if (!res || !res.ok) console.error(`[gm6] ${what} 저장 실패:`, (res && res.error) || "알 수 없음");
+}
 
 /* 상태 */
 let curMode = "list";
@@ -13,26 +20,20 @@ let curRow = "all";        // 행 필터: all / あ / か / ...
 let bookmarkOnly = false;  // 북마크만 보기
 let currentList = null;    // 선택된 리스트: null=전체, ""=개별 단어, "제목"=CSV 리스트
 
-/* ===== 리스트 메타(생성시각) — 홈 최신순 정렬용 (localStorage) ===== */
-const LISTS_KEY = "vocabLists";
-function loadLists() {
-  try { return JSON.parse(localStorage.getItem(LISTS_KEY) || "[]"); }
-  catch { return []; }
-}
-function saveLists(a) { localStorage.setItem(LISTS_KEY, JSON.stringify(a)); }
+/* ===== 리스트 메타(생성시각) — 홈 최신순 정렬용 (words.json 의 lists) ===== */
+let listMeta = (DATA.lists || []).map(m => ({ ...m }));
+function loadLists() { return listMeta.slice(); }
+function saveLists(a) { listMeta = a.slice(); logSaveError("주제 정보", window.boss?.setLists(listMeta)); }
 function recordList(name) {                 // CSV 가져오기 시 신규 리스트 기록
   if (!name) return;
   const a = loadLists();
   if (!a.some(x => x.name === name)) { a.push({ name, createdAt: Date.now() }); saveLists(a); }
 }
 
-/* ===== 리스트 표시 순서 (사용자가 홈에서 직접 지정, localStorage) ===== */
-const ORDER_KEY = "vocabListOrder";
-function loadOrder() {
-  try { const a = JSON.parse(localStorage.getItem(ORDER_KEY) || "[]"); return Array.isArray(a) ? a : []; }
-  catch { return []; }
-}
-function saveOrder(a) { localStorage.setItem(ORDER_KEY, JSON.stringify(a)); }
+/* ===== 리스트 표시 순서 (사용자가 홈에서 직접 지정, words.json 의 listOrder) ===== */
+let listOrder = (DATA.listOrder || []).slice();
+function loadOrder() { return listOrder.slice(); }
+function saveOrder(a) { listOrder = a.slice(); logSaveError("주제 순서", window.boss?.setListOrder(listOrder)); }
 
 /* 홈·시험 범위에 공통으로 쓰는 CSV 리스트 정렬.
    순서를 지정한 리스트가 먼저(지정한 순서대로), 아직 지정 안 한 리스트는 그 위에 최신순. */
@@ -47,48 +48,48 @@ function orderedListNames() {
     .map(x => x.name);
 }
 
-/* ===== 북마크 (localStorage 저장) ===== */
-const BM_KEY = "vocabBookmarks";
-function loadBookmarks() {
-  try { return new Set(JSON.parse(localStorage.getItem(BM_KEY) || "[]")); }
-  catch { return new Set(); }
-}
-let bookmarks = loadBookmarks();
+/* ===== 북마크 (words.json 의 bookmarks = 단어 ID 목록) =====
+   같은 단어(kana+kanji)가 여러 주제에 있으면 함께 북마크/해제 (setBookmark) */
+let bookmarks = new Set(DATA.bookmarks || []);
 function wordKey(w) { return `${w.kana}|${w.kanji || ""}`; }
-function isBookmarked(w) { return bookmarks.has(wordKey(w)); }
-/* 상단 북마크 필터 버튼에 현재 북마크 개수 표시 ('★ 15') */
+function isBookmarked(w) { return bookmarks.has(w.id); }
+function setBookmark(w, on) {
+  const k = wordKey(w);
+  WORDS.forEach(x => {
+    if (wordKey(x) !== k) return;
+    if (on) bookmarks.add(x.id); else bookmarks.delete(x.id);
+  });
+}
+/* 상단 북마크 필터 버튼에 현재 북마크 개수 표시 ('★ 15') — 여러 주제의 같은 단어는 1개로 셈 */
 function updateBmCount() {
+  const n = bookmarkedWords().length;
   const btn = document.getElementById("bmFilter");
-  if (btn) btn.textContent = `★ ${bookmarks.size}`;
+  if (btn) btn.textContent = `★ ${n}`;
   // 단어 입력 화면의 '북마크 전체 해제' 버튼에도 개수 반영
   const clr = document.getElementById("clearBmBtn");
   if (clr) {
-    clr.textContent = `★ 북마크 전체 해제 (${bookmarks.size}개)`;
-    clr.disabled = bookmarks.size === 0;
+    clr.textContent = `★ 북마크 전체 해제 (${n}개)`;
+    clr.disabled = n === 0;
   }
 }
 /* 북마크 저장 + 버튼 개수 갱신 (북마크 변경 시 항상 이 함수 사용) */
 function saveBookmarks() {
-  localStorage.setItem(BM_KEY, JSON.stringify([...bookmarks]));
+  logSaveError("북마크", window.boss?.setBookmarks([...bookmarks]));
   updateBmCount();
 }
 function toggleBookmark(w) {
-  const k = wordKey(w);
-  if (bookmarks.has(k)) bookmarks.delete(k); else bookmarks.add(k);
+  setBookmark(w, !isBookmarked(w));
   saveBookmarks();
 }
-/* 현재 words.csv 에 없는 단어의 북마크 키 정리
-   (words.csv 교체·외부 편집 등으로 남은 옛 데이터가 개수에 섞이지 않도록) */
+/* 없는 단어를 가리키는 북마크 ID 정리 (메모리 목록 기준) */
 function pruneBookmarks() {
-  const valid = new Set(WORDS.map(wordKey));
+  const valid = new Set(WORDS.map(w => w.id));
   let changed = false;
-  for (const k of bookmarks) {
-    if (!valid.has(k)) { bookmarks.delete(k); changed = true; }
+  for (const id of bookmarks) {
+    if (!valid.has(id)) { bookmarks.delete(id); changed = true; }
   }
   if (changed) saveBookmarks();
 }
-pruneBookmarks();
-updateBmCount();
 
 /* 같은 단어(kana+kanji)가 여러 주제에 있으면 처음 것만 남김
    (북마크는 단어 기준으로 저장되므로 북마크 목록에서 주제 수만큼 중복되지 않게) */
@@ -102,6 +103,8 @@ function uniqueWords(list) {
   });
 }
 function bookmarkedWords() { return uniqueWords(WORDS.filter(isBookmarked)); }
+pruneBookmarks();
+updateBmCount();
 
 /* 행 / 북마크 / 리스트 필터 적용 */
 function filteredWords() {
@@ -168,8 +171,7 @@ function makeCard(w) {
 // 목록에서 고른 단어를 현재 필터 순서 그대로의 플래시카드 덱에서 찾아 그 위치부터 표시
 function openFlashAt(w) {
   setMode("flash");                                       // 덱 재구성 (필터 순서 = 목록 순서)
-  const key = wordKey(w);
-  const i = deck.findIndex(x => wordKey(x) === key);
+  const i = deck.findIndex(x => x.id === w.id);
   if (i > 0) { idx = i; showCard(); }
 }
 
@@ -602,7 +604,7 @@ document.getElementById("exportBtn").onclick = async () => {
 
 /* 북마크 전체 해제 — 단어는 그대로 두고 북마크 표시만 모두 지움 (되돌릴 수 없으므로 확인) */
 document.getElementById("clearBmBtn").onclick = () => {
-  const n = bookmarks.size;
+  const n = bookmarkedWords().length;
   if (!n) { showAddMsg("해제할 북마크가 없습니다.", false); return; }
   if (!confirm(`북마크 ${n}개를 모두 해제할까요?\n(단어는 삭제되지 않습니다)`)) return;
   bookmarks.clear();
@@ -654,7 +656,7 @@ indivForm.addEventListener("submit", (e) => {
     showAddMsg("저장 실패: " + ((res && res.error) || "알 수 없음"), false);
     return;
   }
-  WORDS.push(w);                                   // 메모리 목록에도 즉시 반영
+  WORDS.push(copyWord(res.word));                  // 메모리 목록에도 즉시 반영 (저장소가 붙인 ID 포함)
   updateIndivCount();
   showAddMsg(`추가됨 ✓  ${w.kanji || w.kana} — ${w.mean}`, true);
   [inWord, inKana, inMean, inExJp, inExHira, inExKr].forEach(el => { el.value = ""; });
@@ -770,20 +772,15 @@ editForm.addEventListener("submit", (e) => {
     editMsg.textContent = `이미 "${list || INDIV_LABEL}"에 있는 단어입니다.`;
     return;
   }
-  const res = window.boss?.updateWord({ kana: w.kana, kanji: w.kanji || "", list }, nw);
+  const res = window.boss?.updateWord(w.id, nw);
   if (!res || !res.ok) {
     editMsg.textContent = "수정 실패: " + ((res && res.error) || "알 수 없음");
     return;
   }
-  // 메모리 목록도 제자리에서 갱신 (예문을 비웠으면 ex 제거)
+  // 메모리 목록도 제자리에서 갱신 (예문을 비웠으면 ex 제거). ID 가 그대로라 북마크도 그대로 유지
   delete w.ex;
   Object.assign(w, nw);
-  // 북마크는 kana|kanji 기준 → 키가 바뀌면 새 키로 옮기고, 옛 키는 다른 주제에 같은 단어가 남아 있을 때만 유지
-  if (newKey !== oldKey && bookmarks.has(oldKey)) {
-    bookmarks.add(newKey);
-    if (!WORDS.some(x => wordKey(x) === oldKey)) bookmarks.delete(oldKey);
-    saveBookmarks();
-  }
+  updateBmCount();                         // 같은 단어끼리 묶어 세므로 개수가 바뀔 수 있음
   closeEdit();
   if (curView === "vocab") {
     if (curMode === "list") {
@@ -879,7 +876,15 @@ function importCsvText(text, title) {
     showAddMsg("CSV 추가 실패: " + ((res && res.error) || "알 수 없음"), false);
     return;
   }
-  fresh.forEach(w => WORDS.push(w));
+  // 저장소가 붙인 ID 포함으로 메모리 목록에 반영. 다른 주제에서 이미 북마크한 단어면 새 항목도 북마크 (같은 단어는 함께 북마크)
+  const bmKeys = new Set(WORDS.filter(isBookmarked).map(wordKey));
+  let bmChanged = false;
+  res.words.forEach(sw => {
+    const w = copyWord(sw);
+    WORDS.push(w);
+    if (bmKeys.has(wordKey(w))) { bookmarks.add(w.id); bmChanged = true; }
+  });
+  if (bmChanged) saveBookmarks();
   if (listName) recordList(listName);                  // 홈 최신순 정렬용 기록
   updateIndivCount();
   const dupCount = candidates.length - fresh.length;
@@ -1014,12 +1019,13 @@ function deleteList(name, label) {
   for (let i = WORDS.length - 1; i >= 0; i--) {
     if ((WORDS[i].list || "") === name) WORDS.splice(i, 1);
   }
-  // 북마크는 kana|kanji 기준이라, 다른 주제에 같은 단어가 남아 있으면 유지
-  const remain = new Set(WORDS.map(wordKey));
-  for (const k of [...bookmarks]) if (!remain.has(k)) bookmarks.delete(k);
-  saveBookmarks();
-  saveLists(loadLists().filter(m => m.name !== name));   // 리스트 메타 제거
-  saveOrder(loadOrder().filter(n => n !== name));        // 저장된 순서에서도 제거
+  // 저장소(words.json)는 삭제한 단어의 북마크·주제 정보·순서를 이미 정리함 → 메모리 사본만 맞춤
+  // (다른 주제의 같은 단어는 ID 가 달라 북마크가 그대로 유지됨)
+  const remain = new Set(WORDS.map(w => w.id));
+  for (const id of [...bookmarks]) if (!remain.has(id)) bookmarks.delete(id);
+  updateBmCount();
+  listMeta = listMeta.filter(m => m.name !== name);     // 리스트 메타 제거
+  listOrder = listOrder.filter(n => n !== name);        // 저장된 순서에서도 제거
   if (currentList === name) currentList = null;
   updateIndivCount();
   renderHome();
@@ -1181,7 +1187,7 @@ quizForm.addEventListener("submit", (e) => {
     // 정답 → 북마크였다면 해제
     const wasBookmarked = isBookmarked(w);
     if (wasBookmarked) {
-      bookmarks.delete(wordKey(w));
+      setBookmark(w, false);
       saveBookmarks();
     }
     quizResult.textContent = `정답입니다 ✓  ${w.kana}${wasBookmarked ? "  · 북마크 해제됨" : ""}`;
@@ -1196,7 +1202,7 @@ quizForm.addEventListener("submit", (e) => {
     // 오답 → 북마크에 추가 (이미 있으면 유지)
     const already = isBookmarked(w);
     if (!already) {
-      bookmarks.add(wordKey(w));
+      setBookmark(w, true);
       saveBookmarks();
     }
     quizResult.textContent = `오답입니다 ✕${already ? "" : "  북마크 추가됨."}`;
@@ -1285,7 +1291,7 @@ quizBookmark.onclick = () => {
   if (!quizAnswered || !quizDeck.length) return;
   const w = quizDeck[quizIdx];
   if (!isBookmarked(w)) {
-    bookmarks.add(wordKey(w));
+    setBookmark(w, true);
     saveBookmarks();
   }
   quizBookmark.textContent = "★ 북마크 추가됨";
@@ -1681,7 +1687,7 @@ function finishInf(correct, meanOK) {
   } else {
     infBad++;
     const already = isBookmarked(w);                      // 오답 → 북마크 자동 추가
-    if (!already) { bookmarks.add(wordKey(w)); saveBookmarks(); }
+    if (!already) { setBookmark(w, true); saveBookmarks(); }
     quizInfResult.textContent = `오답입니다 ✕${already ? "" : "  북마크 추가됨."}`;
     if (!isReverseQuiz(w)) {
       const detail = document.createElement("div");

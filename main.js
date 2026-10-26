@@ -108,7 +108,9 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,        // preload 에서 words.csv 읽기(fs) 허용
+      sandbox: false,        // preload 에서 words.json 읽기/쓰기(fs) 허용
+      // 단어 저장소(words.json) 위치 = 앱 데이터 폴더 (%APPDATA%\gm6) — portable 빌드에서도 유지됨
+      additionalArguments: [`--gm6-data-dir=${app.getPath('userData')}`],
     },
   });
 

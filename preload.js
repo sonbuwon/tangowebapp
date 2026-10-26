@@ -2,11 +2,90 @@ const { contextBridge, ipcRenderer } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-/* ── words.csv 읽기 / 파싱 ───────────────────────────────────────
-   CSV 열: row,kana,kanji,mean,ex_jp,ex_hira,ex_kr,list
-   list = 소속 리스트(주제명). 빈 값이면 '개별 리스트'.
-   (mean·예문에 쉼표가 들어가므로 따옴표로 감싼 RFC4180 형식) */
-const HEADER = 'row,kana,kanji,mean,ex_jp,ex_hira,ex_kr,list';
+/* ── 단어 저장소: words.json (앱 데이터 폴더, %APPDATA%\gm6) ──────────────
+   {
+     version: 1,
+     nextId: 다음에 쓸 단어 ID,
+     words: [{ id, row, kana, kanji, mean, ex?:{ jp, hira, kr }, list }],   // 파일 순서 = 세트 원본 순서
+     bookmarks: [단어 ID],
+     lists: [{ name, createdAt }],     // 주제 생성 시각 (홈 최신순 정렬용)
+     listOrder: [주제명],              // 홈에서 사용자가 지정한 주제 순서
+   }
+   단어는 고유 ID 로 구분 → 같은 단어가 여러 주제에 있어도, 단어를 수정해도 북마크가 어긋나지 않음.
+   저장은 임시 파일에 쓴 뒤 교체(직전 파일은 .bak 으로 보관) → 저장 중 꺼져도 파일이 깨지지 않음.
+   처음 실행 시 words.json 이 없으면 기존 words.csv + localStorage(북마크·주제 정보)를 옮겨 만든다. */
+const DATA_ARG = '--gm6-data-dir=';
+function dataDir() {
+  // main.js 가 app.getPath('userData') 를 넘겨줌. 없으면(테스트용 실행 등) 앱 폴더
+  const a = process.argv.find(x => x.startsWith(DATA_ARG));
+  return a ? a.slice(DATA_ARG.length) : __dirname;
+}
+const DB_FILE = path.join(dataDir(), 'words.json');
+const BAK_FILE = DB_FILE + '.bak';
+const TMP_FILE = DB_FILE + '.tmp';
+
+function emptyDb() {
+  return { version: 1, nextId: 1, words: [], bookmarks: [], lists: [], listOrder: [] };
+}
+
+// 저장할 단어 형태로 정리 (예문은 일본어 문장이 있을 때만)
+function cleanWord(w, id) {
+  const out = { id, row: w.row || '', kana: String(w.kana), kanji: w.kanji || '', mean: w.mean || '', list: w.list || '' };
+  if (w.ex && w.ex.jp) out.ex = { jp: w.ex.jp, hira: w.ex.hira || '', kr: w.ex.kr || '' };
+  return out;
+}
+
+// 읽어온 내용 검증·보정 (ID 없는 단어는 새 ID, 없는 단어를 가리키는 북마크는 제거)
+function normalizeDb(raw) {
+  if (!raw || !Array.isArray(raw.words)) throw new Error('words 배열 없음');
+  const db = emptyDb();
+  let maxId = 0;
+  raw.words.forEach(w => { if (Number.isInteger(w && w.id) && w.id > maxId) maxId = w.id; });
+  db.nextId = Math.max(Number(raw.nextId) || 1, maxId + 1);
+  const used = new Set();
+  for (const w of raw.words) {
+    if (!w || !w.kana) continue;
+    let id = Number.isInteger(w.id) && !used.has(w.id) ? w.id : db.nextId++;
+    used.add(id);
+    db.words.push(cleanWord(w, id));
+  }
+  db.bookmarks = [...new Set((raw.bookmarks || []).filter(id => used.has(id)))];
+  db.lists = (raw.lists || []).filter(m => m && m.name).map(m => ({ name: String(m.name), createdAt: Number(m.createdAt) || 0 }));
+  db.listOrder = (raw.listOrder || []).filter(n => typeof n === 'string' && n);
+  return db;
+}
+
+function readDbFile(file) {
+  try {
+    let text = fs.readFileSync(file, 'utf8');
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    return normalizeDb(JSON.parse(text));
+  } catch (_) {
+    return null;
+  }
+}
+
+// 본 파일이 정상인지 (깨진 파일을 .bak 으로 복사해 정상 백업을 덮어쓰지 않도록)
+let mainFileOk = true;
+
+// 안전한 저장: 임시 파일에 쓰고 디스크에 확정(fsync) → 직전 파일을 .bak 으로 복사 → 임시 파일로 교체
+function writeDb(db) {
+  fs.mkdirSync(path.dirname(DB_FILE), { recursive: true });
+  const fd = fs.openSync(TMP_FILE, 'w');
+  try {
+    fs.writeSync(fd, JSON.stringify(db, null, 2));
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+  if (mainFileOk && fs.existsSync(DB_FILE)) fs.copyFileSync(DB_FILE, BAK_FILE);
+  fs.renameSync(TMP_FILE, DB_FILE);
+  mainFileOk = true;
+}
+
+/* ── 기존 데이터 옮기기 (words.csv + localStorage) ──────────────────────
+   CSV 열: row,kana,kanji,mean,ex_jp,ex_hira,ex_kr,list (따옴표로 감싼 RFC4180 형식).
+   원본 words.csv 와 localStorage 값은 지우지 않고 그대로 둔다 (백업 겸용). */
 function parseCSV(text) {
   const rows = [];
   let field = '', record = [], inQuotes = false;
@@ -33,208 +112,173 @@ function parseCSV(text) {
   return rows;
 }
 
-// 개발 모드면 __dirname, 패키징(빌드)되면 resources 폴더의 words.csv 사용
-function csvPath() {
+// 개발 모드면 앱 폴더, 패키징(빌드)되면 resources 폴더의 words.csv
+function legacyCsvPath() {
   const candidates = [
-    path.join(process.resourcesPath || '', 'words.csv'), // 빌드: extraResources 로 복사된 편집 가능한 파일
-    path.join(__dirname, 'words.csv'),                   // 개발 모드
+    path.join(process.resourcesPath || '', 'words.csv'),
+    path.join(__dirname, 'words.csv'),
   ];
   for (const c of candidates) {
     try { if (c && fs.existsSync(c)) return c; } catch (_) {}
   }
-  // 파일이 없으면(.gitignore 로 clone 시 빠짐) 헤더만 있는 빈 CSV 생성
-  try { fs.writeFileSync(candidates[1], '﻿' + HEADER + '\r\n', 'utf8'); } catch (_) {}
-  return candidates[1];
+  return null;
 }
 
-function loadWords() {
+function readLocalJson(key, fallback) {
   try {
-    let text = fs.readFileSync(csvPath(), 'utf8');
-    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1); // BOM 제거
+    const v = JSON.parse(window.localStorage.getItem(key) || 'null');
+    return v == null ? fallback : v;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function migrateLegacy() {
+  const db = emptyDb();
+  const file = legacyCsvPath();
+  if (file) {
+    let text = fs.readFileSync(file, 'utf8');
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
     const rows = parseCSV(text);
     rows.shift(); // 헤더 행 제거
-    return rows
-      .filter(r => r[1] !== undefined && r[1] !== '')   // かな 가 있는 줄만 (row 가 비어도 단어는 유지)
-      .map(r => {
-        const [row, kana, kanji, mean, jp, hira, kr, list] = r;
-        const w = { row, kana, kanji: kanji || '', mean: mean || '', list: list || '' };
-        if (jp) w.ex = { jp, hira: hira || '', kr: kr || '' };
-        return w;
-      });
-  } catch (e) {
-    console.error('[gm6] words.csv 읽기 실패:', e.message);
-    return [];
+    for (const r of rows) {
+      const [row, kana, kanji, mean, jp, hira, kr, list] = r;
+      if (!kana) continue;                        // かな 가 있는 줄만
+      db.words.push(cleanWord({ row, kana, kanji, mean, list, ex: jp ? { jp, hira, kr } : null }, db.nextId++));
+    }
   }
+  // 북마크: 예전엔 'かな|漢字' 키 → 같은 키를 가진 단어(모든 주제)의 ID 로 변환
+  const bmKeys = new Set(readLocalJson('vocabBookmarks', []));
+  db.bookmarks = db.words.filter(w => bmKeys.has(`${w.kana}|${w.kanji}`)).map(w => w.id);
+  const lists = readLocalJson('vocabLists', []);
+  db.lists = Array.isArray(lists) ? lists.filter(m => m && m.name).map(m => ({ name: String(m.name), createdAt: Number(m.createdAt) || 0 })) : [];
+  const order = readLocalJson('vocabListOrder', []);
+  db.listOrder = Array.isArray(order) ? order.filter(n => typeof n === 'string' && n) : [];
+  return db;
 }
 
-/* ── words.csv 에 단어 한 줄 추가 ────────────────────────────────
-   ex_jp/ex_hira/ex_kr 는 w.ex 가 있으면 기록, 없으면 빈 값.
-   항상 파일 끝에 추가해 세트(리스트) 원본 순서를 유지한다.
-   (행 필터는 row 열로 동작하므로 파일 내 행 블록 정렬은 필요 없음) */
-function csvEscape(v) {
-  v = v == null ? '' : String(v);
-  return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+// 시작 시 한 번 읽음. 이후에는 메모리의 db 를 바꾸고 바뀔 때마다 파일에 저장
+function loadDb() {
+  if (fs.existsSync(DB_FILE)) {
+    const main = readDbFile(DB_FILE);
+    if (main) return main;
+    mainFileOk = false;
+    const bak = readDbFile(BAK_FILE);                         // 본 파일이 깨졌으면 직전 백업
+    if (bak) {
+      console.error('[gm6] words.json 을 읽을 수 없어 직전 백업(words.json.bak)으로 복구합니다.');
+      try { writeDb(bak); } catch (_) {}
+      return bak;
+    }
+    // 둘 다 읽을 수 없으면 깨진 파일을 다른 이름으로 보관하고 빈 저장소로 시작
+    try { fs.renameSync(DB_FILE, `${DB_FILE}.broken-${Date.now()}`); } catch (_) {}
+    console.error('[gm6] words.json 을 읽을 수 없어 빈 저장소로 시작합니다.');
+    const db = emptyDb();
+    try { writeDb(db); } catch (_) {}
+    return db;
+  }
+  const db = migrateLegacy();
+  try { writeDb(db); } catch (e) { console.error('[gm6] words.json 생성 실패:', e.message); }
+  return db;
 }
-// 단어 한 줄(8열) 생성. ex 3열은 w.ex {jp,hira,kr} 에서, list 는 소속 리스트명
-function wordRecord(w) {
-  const ex = w.ex || {};
-  return [w.row || '', w.kana, w.kanji || '', w.mean || '', ex.jp || '', ex.hira || '', ex.kr || '', w.list || ''];
+
+let db;
+try {
+  db = loadDb();
+} catch (e) {
+  console.error('[gm6] 단어 저장소 읽기 실패:', e.message);
+  db = emptyDb();
 }
-function wordLine(w) {
-  return wordRecord(w).map(csvEscape).join(',');
-}
-function addWordToCsv(w) {
+
+// 메모리 db 를 바꾼 뒤 저장. 저장에 실패하면 바꾸기 전 상태로 되돌림
+function commit(mutate) {
+  const before = JSON.stringify(db);
   try {
-    if (!w || !w.kana) return { ok: false, error: 'かな 없음' };
-    const file = csvPath();
-    let text = fs.readFileSync(file, 'utf8');
-    let bom = '';
-    if (text.charCodeAt(0) === 0xFEFF) { bom = '﻿'; text = text.slice(1); }
-    const eol = text.includes('\r\n') ? '\r\n' : '\n';
-    const lines = text.split(/\r?\n/);
-    while (lines.length && lines[lines.length - 1] === '') lines.pop(); // 끝 빈 줄 제거
-    lines.push(wordLine(w));             // 파일 끝에 추가 (입력 순서 유지)
-    fs.writeFileSync(file, bom + lines.join(eol) + eol, 'utf8');
-    return { ok: true };
+    const result = mutate() || {};
+    writeDb(db);
+    return { ok: true, ...result };
   } catch (e) {
+    db = JSON.parse(before);
     return { ok: false, error: e.message };
   }
 }
 
-/* ── words.csv 에 여러 단어 일괄 추가 (CSV 가져오기용, 같은 주제 내 중복 제외) ── */
-function addWordsToCsv(list) {
-  try {
-    if (!Array.isArray(list) || !list.length) return { ok: false, error: '추가할 단어 없음' };
-    const file = csvPath();
-    let text = fs.readFileSync(file, 'utf8');
-    let bom = '';
-    if (text.charCodeAt(0) === 0xFEFF) { bom = '﻿'; text = text.slice(1); }
-    const eol = text.includes('\r\n') ? '\r\n' : '\n';
-    const lines = text.split(/\r?\n/);
-    while (lines.length && lines[lines.length - 1] === '') lines.pop();
-    // 중복 기준: 같은 리스트(주제) 안의 kana+kanji — 다른 주제에 같은 단어가 있어도 추가
-    // list 열(col8)은 뜻 뒤라 따옴표 영향 → 전체 파싱으로 읽음
-    const existing = new Set();
-    parseCSV(text).slice(1).forEach(r => existing.add((r[1] || '') + '|' + (r[2] || '') + '|' + (r[7] || '')));
-    let added = 0, skipped = 0;
+/* ── 단어 저장소 조작 (렌더러에서 window.boss 로 호출) ── */
+// 여러 단어 추가 (CSV 가져오기·개별 추가). 같은 주제 안의 kana+kanji 중복은 제외. 파일 끝에 순서대로 추가
+function addWords(list) {
+  if (!Array.isArray(list) || !list.length) return { ok: false, error: '추가할 단어 없음' };
+  return commit(() => {
+    const existing = new Set(db.words.map(w => `${w.kana}|${w.kanji}|${w.list}`));
+    const added = [];
+    let skipped = 0;
     for (const w of list) {
       if (!w || !w.kana) { skipped++; continue; }
-      const key = w.kana + '|' + (w.kanji || '') + '|' + (w.list || '');
+      const nw = cleanWord(w, db.nextId);
+      const key = `${nw.kana}|${nw.kanji}|${nw.list}`;
       if (existing.has(key)) { skipped++; continue; }
       existing.add(key);
-      lines.push(wordLine(w));           // 파일 끝에 순서대로 추가 → CSV 세트 원본 순서 유지
-      added++;
+      db.nextId++;
+      db.words.push(nw);
+      added.push(nw);
     }
-    fs.writeFileSync(file, bom + lines.join(eol) + eol, 'utf8');
-    return { ok: true, added, skipped };
-  } catch (e) {
-    return { ok: false, error: e.message };
-  }
+    return { added: added.length, skipped, words: added };
+  });
 }
 
-/* ── words.csv 에서 단어 한 개 삭제 (kana + kanji 로 매칭) ───────── */
-function deleteWordFromCsv(key) {
-  try {
-    if (!key || !key.kana) return { ok: false, error: 'かな 없음' };
-    const file = csvPath();
-    let text = fs.readFileSync(file, 'utf8');
-    let bom = '';
-    if (text.charCodeAt(0) === 0xFEFF) { bom = '﻿'; text = text.slice(1); }
-    const eol = text.includes('\r\n') ? '\r\n' : '\n';
-    const lines = text.split(/\r?\n/);
-    while (lines.length && lines[lines.length - 1] === '') lines.pop();
-    let removed = 0;
-    const kept = lines.filter((l, i) => {
-      if (i === 0) return true;                       // 헤더 유지
-      const p = l.split(',');                          // kana=col2, kanji=col3 (뜻 앞이라 안전)
-      if (p[1] === key.kana && (p[2] || '') === (key.kanji || '')) { removed++; return false; }
-      return true;
-    });
-    if (!removed) return { ok: false, error: '해당 단어를 찾지 못함' };
-    fs.writeFileSync(file, bom + kept.join(eol) + eol, 'utf8');
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e.message };
-  }
+// 단어 수정 (ID 그대로, 같은 자리에서 교체 → 순서·북마크 유지)
+function updateWord(id, w) {
+  if (!w || !w.kana) return { ok: false, error: 'かな 없음' };
+  const i = db.words.findIndex(x => x.id === id);
+  if (i < 0) return { ok: false, error: '수정할 단어를 찾지 못함' };
+  return commit(() => {
+    db.words[i] = cleanWord({ ...w, list: db.words[i].list }, id);
+    return { word: db.words[i] };
+  });
 }
 
-/* ── words.csv 에서 특정 리스트(주제)의 단어 전부 삭제 ──────────────
-   listName='' 이면 개별 리스트(소속 없는 단어) 전체 삭제.
-   list 열(col7)은 뜻 뒤라 따옴표 영향 → 전체를 파싱 후 재직렬화. */
-function deleteListFromCsv(listName) {
-  try {
-    const file = csvPath();
-    let text = fs.readFileSync(file, 'utf8');
-    let bom = '';
-    if (text.charCodeAt(0) === 0xFEFF) { bom = '﻿'; text = text.slice(1); }
-    const eol = text.includes('\r\n') ? '\r\n' : '\n';
-    const records = parseCSV(text);
-    if (!records.length) return { ok: true, removed: 0 };
-    const target = listName || '';
-    const kept = [records[0]];                         // 헤더 유지
-    let removed = 0;
-    for (let i = 1; i < records.length; i++) {
-      const rec = records[i];
-      if (!rec.length || (rec.length === 1 && rec[0] === '')) continue; // 빈 줄
-      if ((rec[7] || '') === target) { removed++; continue; }
-      kept.push(rec);
+// 단어들 삭제 (ID 목록) — 북마크에서도 제거
+function removeIds(ids) {
+  const set = new Set(ids);
+  db.words = db.words.filter(w => !set.has(w.id));
+  db.bookmarks = db.bookmarks.filter(id => !set.has(id));
+}
+function deleteWord(id) {
+  if (!db.words.some(w => w.id === id)) return { ok: false, error: '해당 단어를 찾지 못함' };
+  return commit(() => { removeIds([id]); });
+}
+
+// 특정 리스트(주제)의 단어 전부 삭제. listName='' 이면 개별 단어 전체. 주제 정보·순서도 함께 정리
+function deleteList(listName) {
+  const target = listName || '';
+  return commit(() => {
+    const ids = db.words.filter(w => w.list === target).map(w => w.id);
+    removeIds(ids);
+    if (target) {
+      db.lists = db.lists.filter(m => m.name !== target);
+      db.listOrder = db.listOrder.filter(n => n !== target);
     }
-    const out = kept.map(r => r.map(csvEscape).join(',')).join(eol) + eol;
-    fs.writeFileSync(file, bom + out, 'utf8');
-    return { ok: true, removed };
-  } catch (e) {
-    return { ok: false, error: e.message };
-  }
+    return { removed: ids.length };
+  });
 }
 
-/* ── words.csv 의 단어 수정 (oldKey 줄을 같은 자리에서 새 값으로 교체 → 순서 유지) ──
-   oldKey = { kana, kanji, list } — 같은 단어가 다른 주제에도 있을 수 있으므로 list 까지 일치하는 줄만 교체.
-   예문에 줄바꿈·쉼표가 있어도 안전하도록 전체를 파싱 후 재직렬화. */
-function updateWordInCsv(oldKey, w) {
-  try {
-    if (!oldKey || !oldKey.kana) return { ok: false, error: '원본 키 없음' };
-    if (!w || !w.kana) return { ok: false, error: 'かな 없음' };
-    const file = csvPath();
-    let text = fs.readFileSync(file, 'utf8');
-    let bom = '';
-    if (text.charCodeAt(0) === 0xFEFF) { bom = '﻿'; text = text.slice(1); }
-    const eol = text.includes('\r\n') ? '\r\n' : '\n';
-    const records = parseCSV(text);
-    if (!records.length) return { ok: false, error: '수정할 단어를 찾지 못함' };
-    const out = [records[0]];                          // 헤더 유지
-    let replaced = false;
-    for (let i = 1; i < records.length; i++) {
-      const rec = records[i];
-      if (!rec.length || (rec.length === 1 && rec[0] === '')) continue; // 빈 줄
-      if (!replaced && rec[1] === oldKey.kana && (rec[2] || '') === (oldKey.kanji || '') &&
-          (rec[7] || '') === (oldKey.list || '')) {
-        out.push(wordRecord(w));                       // 첫 번째 일치 줄만 제자리에서 교체
-        replaced = true;
-        continue;
-      }
-      out.push(rec);
-    }
-    if (!replaced) return { ok: false, error: '수정할 단어를 찾지 못함' };
-    fs.writeFileSync(file, bom + out.map(r => r.map(csvEscape).join(',')).join(eol) + eol, 'utf8');
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e.message };
-  }
+// 모든 단어 삭제
+function clearWords() {
+  return commit(() => { db.words = []; db.bookmarks = []; db.lists = []; db.listOrder = []; });
 }
 
-/* ── words.csv 의 모든 단어 삭제 (헤더만 남김) ─────────────────── */
-function clearAllWords() {
-  try {
-    const file = csvPath();
-    let text = fs.readFileSync(file, 'utf8');
-    let bom = '';
-    if (text.charCodeAt(0) === 0xFEFF) { bom = '﻿'; text = text.slice(1); }
-    const eol = text.includes('\r\n') ? '\r\n' : '\n';
-    fs.writeFileSync(file, bom + HEADER + eol, 'utf8');
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e.message };
-  }
+// 북마크 / 주제 정보 / 주제 순서 통째로 저장 (렌더러가 가진 현재 상태)
+function setBookmarks(ids) {
+  return commit(() => {
+    const valid = new Set(db.words.map(w => w.id));
+    db.bookmarks = [...new Set((ids || []).filter(id => valid.has(id)))];
+  });
+}
+function setLists(lists) {
+  return commit(() => {
+    db.lists = (lists || []).filter(m => m && m.name).map(m => ({ name: String(m.name), createdAt: Number(m.createdAt) || 0 }));
+  });
+}
+function setListOrder(names) {
+  return commit(() => { db.listOrder = (names || []).filter(n => typeof n === 'string' && n); });
 }
 
 // 렌더러(게임)에서 안전하게 호출할 수 있는 최소한의 다리
@@ -252,18 +296,28 @@ contextBridge.exposeInMainWorld('boss', {
   timerStart: (sec) => ipcRenderer.send('timer:start', sec),
   // 구글 음성(온라인) MP3 받아오기 → Promise<Uint8Array|null>
   tts: (text) => ipcRenderer.invoke('boss:tts', text),
-  // words.csv 에서 읽어온 단어 목록
-  words: loadWords(),
-  // 새 단어를 words.csv 에 추가 → { ok, error? }
-  addWord: (w) => addWordToCsv(w),
-  // 여러 단어 일괄 추가 (CSV 가져오기) → { ok, added, skipped, error? }
-  addWords: (list) => addWordsToCsv(list),
-  // 단어 삭제 (kana+kanji) → { ok, error? }
-  deleteWord: (key) => deleteWordFromCsv(key),
+  // words.json 에서 읽어온 시작 시점 데이터 { words, bookmarks, lists, listOrder }
+  data: { words: db.words, bookmarks: db.bookmarks, lists: db.lists, listOrder: db.listOrder },
+  // 저장 파일 위치 (안내 표시용)
+  dataFile: DB_FILE,
+  // 새 단어 한 개 추가 → { ok, word?, error? } (같은 주제에 이미 있으면 ok:false)
+  addWord: (w) => {
+    const r = addWords([w]);
+    if (!r.ok) return r;
+    return r.words.length ? { ok: true, word: r.words[0] } : { ok: false, error: '이미 있는 단어' };
+  },
+  // 여러 단어 일괄 추가 (CSV 가져오기) → { ok, added, skipped, words(ID 포함), error? }
+  addWords: (list) => addWords(list),
+  // 단어 삭제 (ID) → { ok, error? }
+  deleteWord: (id) => deleteWord(id),
   // 리스트(주제) 전체 삭제. name='' 이면 개별 리스트 → { ok, removed, error? }
-  deleteList: (name) => deleteListFromCsv(name),
-  // 단어 수정 (원본 kana+kanji+list → 새 값) → { ok, error? }
-  updateWord: (oldKey, w) => updateWordInCsv(oldKey, w),
-  // 전체 삭제 (헤더만 남김) → { ok, error? }
-  clearWords: () => clearAllWords(),
+  deleteList: (name) => deleteList(name),
+  // 단어 수정 (ID, 새 값) → { ok, word?, error? }
+  updateWord: (id, w) => updateWord(id, w),
+  // 전체 삭제 → { ok, error? }
+  clearWords: () => clearWords(),
+  // 북마크(단어 ID 목록) / 주제 정보 / 주제 순서 저장 → { ok, error? }
+  setBookmarks: (ids) => setBookmarks(ids),
+  setLists: (lists) => setLists(lists),
+  setListOrder: (names) => setListOrder(names),
 });

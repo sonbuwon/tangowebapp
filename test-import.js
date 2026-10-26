@@ -11,7 +11,7 @@ app.whenReady().then(async () => {
   const decoded = csvText.slice(0,3).toString('hex')==='efbbbf' ? csvText.slice(3).toString('utf8') : csvText.toString('utf8');
   const r = await win.webContents.executeJavaScript(`(()=>{
     importCsvText(${JSON.stringify(decoded)});
-    return {msg:${g}('addMsg').textContent, cls:${g}('addMsg').className, wordsLen:(window.boss.words||[]).length};
+    return {msg:${g}('addMsg').textContent, cls:${g}('addMsg').className, wordsLen:WORDS.length};
   })()`);
   console.log('IMPORT ->', JSON.stringify(r));
   app.quit();
