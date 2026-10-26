@@ -81,6 +81,7 @@
               <!-- 왼쪽 상단: 단어(히라가나) 읽어주기 (S 키) -->
               <button class="bm-btn fc-speak" id="fcSpeak" title="단어 읽어주기 (S)">🔊</button>
               <button class="bm-btn fc-bm" id="fcBookmark" title="북마크">☆</button>
+              <button class="bm-btn fc-edit" id="fcEdit" title="단어 수정 (E)">✎</button>
               <div class="big-kana" id="fcKana"></div>
               <!-- 예문(일본어 문장): '예문 보기' 체크 시 첫 화면부터 표시 -->
               <div class="fc-ex fc-ex-jp" id="fcExJp"></div>
@@ -341,6 +342,49 @@
     </div>
   </div>
 
+  <!-- ===== 단어 수정 창 (목록 카드 ✎ / 플래시카드 ✎·E 키) — 상단 바 아래를 덮는 모달 =====
+       입력 규칙은 개별 단어 추가와 동일. 수정은 해당 주제의 단어 한 개에만 반영 -->
+  <div id="editModal" style="display:none">
+    <form id="editForm" autocomplete="off">
+      <div class="edit-head">
+        <span class="edit-title">단어 수정</span>
+        <span class="edit-list" id="editList"></span>
+      </div>
+      <label class="field">
+        <span>일본어 단어 <em>*</em></span>
+        <input id="edWord" type="text" placeholder="한자 (한자가 없으면 히라가나)" />
+      </label>
+      <label class="field">
+        <span>히라가나</span>
+        <input id="edKana" type="text" placeholder="읽기 (위 칸이 히라가나면 비워두세요)" />
+      </label>
+      <label class="field">
+        <span>한국어 뜻 <em>*</em></span>
+        <input id="edMean" type="text" placeholder="한국어 뜻" />
+      </label>
+      <details class="indiv-ex" id="edExBox">
+        <summary>예문 (선택)</summary>
+        <label class="field">
+          <span>예문 일본어</span>
+          <input id="edExJp" type="text" placeholder="일본어 문장 (비우면 예문 삭제)" />
+        </label>
+        <label class="field">
+          <span>예문 히라가나</span>
+          <input id="edExHira" type="text" placeholder="히라가나 문장" />
+        </label>
+        <label class="field">
+          <span>예문 한국어</span>
+          <input id="edExKr" type="text" placeholder="한국어 해석" />
+        </label>
+      </details>
+      <div id="editMsg"></div>
+      <div class="edit-btns">
+        <button type="button" id="editCancelBtn">취소</button>
+        <button type="submit" id="editSaveBtn">저장</button>
+      </div>
+    </form>
+  </div>
+
   <!-- 글로벌 단축키 안내 (전 화면 하단 고정, 마우스 오버 시 표시) -->
   <div id="shortcutBar">
     <div class="sc-tab">⌨ 단축키</div>
@@ -361,6 +405,7 @@
         <div class="sc-row"><span class="sc-key">↓</span>뜻 보기/숨기기</div>
         <div class="sc-row"><span class="sc-key">↑</span>예문 보기 설정/해제</div>
         <div class="sc-row"><span class="sc-key">B</span>북마크</div>
+        <div class="sc-row"><span class="sc-key">E</span>단어 수정</div>
         <div class="sc-row"><span class="sc-key">S</span>단어 읽어주기 (음성 기능)</div>
         <div class="sc-row"><span class="sc-key">D</span>예문 읽어주기 (예문 보기 체크 + 펼친 상태, 음성 기능)</div>
         <div class="sc-row"><span class="sc-key">Ctrl + Q</span>섞기</div>

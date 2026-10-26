@@ -695,7 +695,7 @@ html, body {
   padding: 12px 14px; cursor: pointer; transition: .15s;
 }
 .card:hover { border-color: var(--accent-light); }
-.card .head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding-right: 30px; }
+.card .head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding-right: 64px; }
 
 /* 북마크 버튼 */
 .bm-btn {
@@ -708,6 +708,37 @@ html, body {
 .bm-btn:hover { color: var(--text); }
 .bm-btn.on { background: #4a3f1e; color: #ffd86b; border-color: #6b5a2a; }
 .fc-bm { position: absolute; top: 10px; right: 10px; z-index: 3; }
+/* 단어 수정 버튼: 북마크 버튼 왼쪽 (목록 카드 / 플래시카드) */
+.ed-btn { right: 40px; font-size: .9rem; }
+.fc-edit { position: absolute; top: 10px; right: 44px; z-index: 3; font-size: .9rem; }
+
+/* ===== 단어 수정 창 (상단 드래그 바 아래를 덮는 모달) ===== */
+#editModal {
+  position: fixed; top: 30px; left: 0; right: 0; bottom: 0; z-index: 1000;
+  background: rgba(0,0,0,.55);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 14px; overflow-y: auto;
+}
+#editForm {
+  width: 100%; max-width: 380px;
+  display: flex; flex-direction: column; gap: 12px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 14px;
+  padding: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.45);
+}
+.edit-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.edit-title { font-size: .92rem; font-weight: 700; color: var(--text); }
+.edit-list { font-size: .76rem; color: var(--sub); }
+#editMsg { min-height: 1em; font-size: .78rem; color: #e06b6b; text-align: center; }
+#editMsg:empty { display: none; }
+.edit-btns { display: flex; gap: 8px; }
+.edit-btns button {
+  flex: 1; padding: 9px; border-radius: 9px;
+  font-size: .86rem; font-weight: 700; cursor: pointer; transition: .15s;
+}
+#editCancelBtn { border: 1px solid var(--line); background: transparent; color: var(--accent); }
+#editCancelBtn:hover { background: var(--accent-soft); color: var(--text); }
+#editSaveBtn { border: 1px solid var(--accent); background: var(--accent-soft); color: var(--text); }
+#editSaveBtn:hover { background: var(--accent-light); }
 /* 플래시카드 왼쪽 상단: 단어(히라가나) 읽어주기 버튼 / 펼침 칸 왼쪽 상단: 예문 읽어주기 버튼 */
 .fc-speak { position: absolute; top: 10px; left: 10px; right: auto; z-index: 3; font-size: .85rem; }
 .fc-speak-ex { top: 10px; left: 0; }

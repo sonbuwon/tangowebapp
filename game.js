@@ -2,8 +2,8 @@
    각 항목: { row(오십음 행), kana(히라가나), kanji, mean(한국어 뜻),
             ex?:{ jp(한자문장), hira(히라가나문장), kr(한국어해석) } }
    ▶ 단어 추가/수정은 words.csv 파일을 편집하세요. */
-// window.boss.words 는 contextBridge 로 노출된 읽기 전용 배열 → slice() 로 수정 가능한 사본 사용
-const WORDS = ((window.boss && window.boss.words) || []).slice();
+// window.boss.words 는 contextBridge 로 노출된 읽기 전용 배열 → 항목까지 복사해 수정 가능한 사본 사용 (단어 수정 시 제자리 갱신)
+const WORDS = ((window.boss && window.boss.words) || []).map(w => w.ex ? { ...w, ex: { ...w.ex } } : { ...w });
 
 /* 상태 */
 let curMode = "list";
@@ -137,13 +137,16 @@ function makeCard(w) {
   const marked = isBookmarked(w);
   c.innerHTML = `
     <button class="bm-btn ${marked ? "on" : ""}" title="북마크">${marked ? "★" : "☆"}</button>
+    <button class="bm-btn ed-btn" title="단어 수정">✎</button>
     <div class="head">
       ${w.kanji ? `<span class="kanji">${w.kanji}</span>` : ""}
       <span class="kana" ${kanaStyle}>${w.kana}</span>
     </div>
     <div class="mean" ${meanStyle}>${w.mean}</div>`;
   // 북마크 버튼
-  const bm = c.querySelector(".bm-btn");
+  const bm = c.querySelector(".bm-btn:not(.ed-btn)");
+  // 수정 버튼 → 단어 수정 창 (카드 클릭=플래시카드 열기와 구분)
+  c.querySelector(".ed-btn").onclick = (e) => { e.stopPropagation(); openEdit(w); };
   bm.onclick = (e) => {
     e.stopPropagation();
     toggleBookmark(w);
@@ -193,12 +196,14 @@ function showCard(keepReveal = true) {
     exJp.textContent = ""; exHira.textContent = ""; exKr.textContent = "";
     document.getElementById("fcProgress").textContent = "0 / 0";
     bm.style.display = "none";
+    fcEdit.style.display = "none";
     fcSpeak.style.display = "none";
     fcSpeakEx.style.display = "none";
     stopSpeak();
     return;
   }
   bm.style.display = "flex";
+  fcEdit.style.display = "flex";
   // 설정 '음성 기능' 이 꺼져 있으면 읽어주기 버튼 숨김
   fcSpeak.style.display = speechOn ? "flex" : "none";
   fcSpeakEx.style.display = speechOn ? "flex" : "none";
@@ -412,6 +417,9 @@ document.getElementById("fcBookmark").onclick = (e) => {
   bm.classList.toggle("on", now);
   bm.textContent = now ? "★" : "☆";
 };
+// 플래시카드 수정 버튼 (E 키) → 현재 카드 단어 수정 창
+const fcEdit = document.getElementById("fcEdit");
+fcEdit.onclick = (e) => { e.stopPropagation(); if (deck.length) openEdit(deck[idx]); };
 
 /* ===== 행 / 북마크 필터 ===== */
 document.querySelectorAll(".row-btn[data-row]").forEach(b => {
@@ -457,8 +465,9 @@ document.getElementById("hideKana").onclick = () => {
 
 /* ===== 키보드 ===== */
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") {            // Esc → 창 즉시 숨김 (Electron)
-    window.boss?.hide();
+  if (e.key === "Escape") {            // Esc → 창 즉시 숨김 (Electron). 단어 수정 창이 열려 있으면 창만 닫음
+    if (isEditOpen()) closeEdit();
+    else window.boss?.hide();
     return;
   }
   // Alt+1~5 → 화면 전환 (전역 단축키가 막혀도 창이 떠 있으면 동작)
@@ -467,6 +476,8 @@ document.addEventListener("keydown", e => {
     setView({ Digit1: "home", Digit2: "vocab", Digit3: "flash", Digit4: "quiz", Digit5: "settings" }[e.code]);
     return;
   }
+  // 단어 수정 창 입력 중에는 아래 단축키(B·S·D·화살표 등)를 막음
+  if (isEditOpen()) return;
   // 무한 테스트 진행 중: 1~4 보기 선택, Enter 다음 문제, B 북마크 토글
   if (curView === "quiz" && quizInf.style.display !== "none") {
     if (/^[1-4]$/.test(e.key)) {
@@ -499,7 +510,9 @@ document.addEventListener("keydown", e => {
     fcShowEx.dispatchEvent(new Event("change"));
   }
   if (e.key === "b" || e.key === "B") document.getElementById("fcBookmark").click();
-  if (e.key === "s" || e.key === "S") speakWord();          // S → 단어(히라가나) 읽어주기
+  // E → 현재 카드 단어 수정 (기본 입력 막기: 열린 창의 첫 칸에 'e' 가 들어가지 않도록)
+  if ((e.key === "e" || e.key === "E") && !e.ctrlKey && !e.altKey) { e.preventDefault(); fcEdit.click(); }
+  if (e.key === "s" || e.key === "S") speakWord();         // S → 단어(히라가나) 읽어주기
   if (e.key === "d" || e.key === "D") speakEx();            // D → 예문(히라가나 문장) 읽어주기 (펼친 상태)
   if (e.ctrlKey && (e.key === "q" || e.key === "Q")) { e.preventDefault(); shuffleDeck(); }  // Ctrl+Q → 섞기
 });
@@ -695,6 +708,94 @@ function setIndivOpen(open, focus) {
 }
 indivToggle.onclick = () => setIndivOpen(indivForm.style.display === "none", true);
 setIndivOpen(localStorage.getItem(INDIV_OPEN_KEY) === "1", false);
+
+/* ===== 단어 수정 창 (목록 카드 ✎ / 플래시카드 ✎·E 키) =====
+   입력 규칙은 개별 단어 추가와 동일. 수정은 그 주제(list)의 단어 한 개에만 반영하고,
+   WORDS 의 객체를 제자리에서 바꾸므로 플래시카드 덱·시험 목록에도 그대로 반영된다. */
+const editModal = document.getElementById("editModal");
+const editForm = document.getElementById("editForm");
+const edWord = document.getElementById("edWord");
+const edKana = document.getElementById("edKana");
+const edMean = document.getElementById("edMean");
+const edExBox = document.getElementById("edExBox");
+const edExJp = document.getElementById("edExJp");
+const edExHira = document.getElementById("edExHira");
+const edExKr = document.getElementById("edExKr");
+const editMsg = document.getElementById("editMsg");
+let editingWord = null;    // 수정 중인 WORDS 항목 (null 이면 닫힘)
+
+function isEditOpen() { return editingWord !== null; }
+function openEdit(w) {
+  if (!w) return;
+  editingWord = w;
+  stopSpeak();
+  document.getElementById("editList").textContent = w.list || INDIV_LABEL;
+  // 한자가 있으면 일본어=한자·히라가나=kana, 없으면 일본어=kana·히라가나 빈 칸 (추가 폼 규칙과 대칭)
+  edWord.value = w.kanji || w.kana;
+  edKana.value = w.kanji ? w.kana : "";
+  edMean.value = w.mean || "";
+  const ex = w.ex || {};
+  edExJp.value = ex.jp || "";
+  edExHira.value = ex.hira || "";
+  edExKr.value = ex.kr || "";
+  edExBox.open = !!w.ex;
+  editMsg.textContent = "";
+  editModal.style.display = "flex";
+  setTimeout(() => { edWord.focus(); edWord.select(); }, 0);
+}
+function closeEdit() {
+  editingWord = null;
+  editModal.style.display = "none";
+}
+document.getElementById("editCancelBtn").onclick = closeEdit;
+editModal.addEventListener("mousedown", (e) => { if (e.target === editModal) closeEdit(); });  // 바깥 클릭 → 닫기
+
+editForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const w = editingWord;
+  if (!w) return;
+  const c0 = edWord.value.trim(), c1 = edKana.value.trim(), c2 = edMean.value.trim();
+  if (!c0) { editMsg.textContent = "일본어 단어를 입력하세요."; edWord.focus(); return; }
+  if (!c2) { editMsg.textContent = "한국어 뜻을 입력하세요."; edMean.focus(); return; }
+  let kana, kanji;
+  if (c1 && c1 !== "-") { kana = c1; kanji = c0; } else { kana = c0; kanji = ""; }
+  const list = w.list || "";
+  const nw = { row: rowFromKana(kana) || "", kana, kanji, mean: c2, list };
+  const exJp = edExJp.value.trim();
+  if (exJp) nw.ex = { jp: exJp, hira: edExHira.value.trim(), kr: edExKr.value.trim() };
+
+  const oldKey = wordKey(w), newKey = wordKey(nw);
+  // 같은 주제 안에 바꾼 단어가 이미 있으면 거부 (자기 자신 제외)
+  if (newKey !== oldKey && WORDS.some(x => x !== w && (x.list || "") === list && wordKey(x) === newKey)) {
+    editMsg.textContent = `이미 "${list || INDIV_LABEL}"에 있는 단어입니다.`;
+    return;
+  }
+  const res = window.boss?.updateWord({ kana: w.kana, kanji: w.kanji || "", list }, nw);
+  if (!res || !res.ok) {
+    editMsg.textContent = "수정 실패: " + ((res && res.error) || "알 수 없음");
+    return;
+  }
+  // 메모리 목록도 제자리에서 갱신 (예문을 비웠으면 ex 제거)
+  delete w.ex;
+  Object.assign(w, nw);
+  // 북마크는 kana|kanji 기준 → 키가 바뀌면 새 키로 옮기고, 옛 키는 다른 주제에 같은 단어가 남아 있을 때만 유지
+  if (newKey !== oldKey && bookmarks.has(oldKey)) {
+    bookmarks.add(newKey);
+    if (!WORDS.some(x => wordKey(x) === oldKey)) bookmarks.delete(oldKey);
+    saveBookmarks();
+  }
+  closeEdit();
+  if (curView === "vocab") {
+    if (curMode === "list") {
+      const sc = document.getElementById("content");
+      const top = sc.scrollTop;
+      renderList();
+      sc.scrollTop = top;                  // 목록 위치 유지
+    } else {
+      showCard();                          // 같은 카드 그대로 다시 표시 (펼침 상태 유지)
+    }
+  }
+});
 
 /* ===== CSV 파일에서 가져오기 (일본어단어, 히라가나, 한국어뜻[, 예문일본어, 예문히라가나, 예문한국어]) ===== */
 const csvFile = document.getElementById("csvFile");
@@ -1860,6 +1961,7 @@ const ALL_SCREENS = [
 let curView = "home";
 function setView(view) {
   if (!SCREENS[view]) return;
+  if (isEditOpen()) closeEdit();             // 화면을 옮기면 단어 수정 창은 닫음 (저장 안 함)
   const screenId = SCREENS[view];
   // 키보드 가드용 (플래시카드 조작키는 curView === "vocab" 일 때만)
   curView = (view === "vocab" || view === "flash") ? "vocab" : view;

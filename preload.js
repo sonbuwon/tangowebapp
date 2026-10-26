@@ -76,10 +76,12 @@ function csvEscape(v) {
   return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
 }
 // 단어 한 줄(8열) 생성. ex 3열은 w.ex {jp,hira,kr} 에서, list 는 소속 리스트명
-function wordLine(w) {
+function wordRecord(w) {
   const ex = w.ex || {};
-  return [w.row, w.kana, w.kanji || '', w.mean || '', ex.jp || '', ex.hira || '', ex.kr || '', w.list || '']
-    .map(csvEscape).join(',');
+  return [w.row || '', w.kana, w.kanji || '', w.mean || '', ex.jp || '', ex.hira || '', ex.kr || '', w.list || ''];
+}
+function wordLine(w) {
+  return wordRecord(w).map(csvEscape).join(',');
 }
 function addWordToCsv(w) {
   try {
@@ -185,7 +187,9 @@ function deleteListFromCsv(listName) {
   }
 }
 
-/* ── words.csv 의 단어 수정 (oldKey 줄을 같은 자리에서 새 값으로 교체 → 순서 유지) ── */
+/* ── words.csv 의 단어 수정 (oldKey 줄을 같은 자리에서 새 값으로 교체 → 순서 유지) ──
+   oldKey = { kana, kanji, list } — 같은 단어가 다른 주제에도 있을 수 있으므로 list 까지 일치하는 줄만 교체.
+   예문에 줄바꿈·쉼표가 있어도 안전하도록 전체를 파싱 후 재직렬화. */
 function updateWordInCsv(oldKey, w) {
   try {
     if (!oldKey || !oldKey.kana) return { ok: false, error: '원본 키 없음' };
@@ -195,21 +199,23 @@ function updateWordInCsv(oldKey, w) {
     let bom = '';
     if (text.charCodeAt(0) === 0xFEFF) { bom = '﻿'; text = text.slice(1); }
     const eol = text.includes('\r\n') ? '\r\n' : '\n';
-    const lines = text.split(/\r?\n/);
-    while (lines.length && lines[lines.length - 1] === '') lines.pop();
-    let replaced = 0;
-    const line = wordLine(w);
-    for (let i = 1; i < lines.length; i++) {
-      const p = lines[i].split(',');
-      if (p[1] === oldKey.kana && (p[2] || '') === (oldKey.kanji || '')) {
-        if (replaced === 0) lines[i] = line;    // 첫 번째 일치 줄을 제자리에서 교체
-        else lines[i] = null;                   // 혹시 남은 중복 줄은 제거
-        replaced++;
+    const records = parseCSV(text);
+    if (!records.length) return { ok: false, error: '수정할 단어를 찾지 못함' };
+    const out = [records[0]];                          // 헤더 유지
+    let replaced = false;
+    for (let i = 1; i < records.length; i++) {
+      const rec = records[i];
+      if (!rec.length || (rec.length === 1 && rec[0] === '')) continue; // 빈 줄
+      if (!replaced && rec[1] === oldKey.kana && (rec[2] || '') === (oldKey.kanji || '') &&
+          (rec[7] || '') === (oldKey.list || '')) {
+        out.push(wordRecord(w));                       // 첫 번째 일치 줄만 제자리에서 교체
+        replaced = true;
+        continue;
       }
+      out.push(rec);
     }
     if (!replaced) return { ok: false, error: '수정할 단어를 찾지 못함' };
-    const out = lines.filter(l => l !== null);
-    fs.writeFileSync(file, bom + out.join(eol) + eol, 'utf8');
+    fs.writeFileSync(file, bom + out.map(r => r.map(csvEscape).join(',')).join(eol) + eol, 'utf8');
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message };
@@ -256,7 +262,7 @@ contextBridge.exposeInMainWorld('boss', {
   deleteWord: (key) => deleteWordFromCsv(key),
   // 리스트(주제) 전체 삭제. name='' 이면 개별 리스트 → { ok, removed, error? }
   deleteList: (name) => deleteListFromCsv(name),
-  // 단어 수정 (원본 kana+kanji → 새 값) → { ok, error? }
+  // 단어 수정 (원본 kana+kanji+list → 새 값) → { ok, error? }
   updateWord: (oldKey, w) => updateWordInCsv(oldKey, w),
   // 전체 삭제 (헤더만 남김) → { ok, error? }
   clearWords: () => clearAllWords(),
