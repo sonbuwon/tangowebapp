@@ -350,6 +350,24 @@ html, body {
   font-size: .8rem; line-height: 1; transition: .15s;
 }
 .deck-del:hover { background: #4a2323; color: #ff8a8a; }
+/* 주제 이름 변경 버튼 + 이름 자리 입력칸 */
+.deck-ren {
+  width: 28px; height: 28px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--accent-soft); color: var(--sub);
+  font-size: .9rem; line-height: 1; transition: .15s;
+}
+.deck-ren:hover { color: var(--text); border-color: var(--accent); }
+.deck-rename {
+  width: 100%; background: var(--bg); color: var(--text);
+  border: 1px solid var(--accent); border-radius: 7px;
+  padding: 4px 8px; font-size: .95rem; font-weight: 700; font-family: inherit; outline: none;
+  user-select: text;
+}
+.deck-rename.invalid { border-color: #e06b6b; }
+.deck-rename-msg { font-size: .74rem; font-weight: 600; color: #e06b6b; margin-top: 4px; }
+.deck-rename-msg:empty { display: none; }
+.deck-row.renaming { cursor: default; }
+.deck-row.renaming .deck-name { margin-right: 10px; }
 
 /* 순서 변경 모드 — 평소에는 손잡이·▲▼ 숨김 */
 .deck-handle, .deck-move { display: none; }
@@ -367,7 +385,7 @@ html, body {
 
 #homeList.reordering .deck-handle { display: inline-block; }
 #homeList.reordering .deck-move { display: inline-flex; }
-#homeList.reordering .deck-del { display: none; }
+#homeList.reordering .deck-del, #homeList.reordering .deck-ren { display: none; }
 #homeList.reordering .deck-count { display: none; }
 #homeList.reordering .deck-row { cursor: default; }
 #homeList.reordering .deck-row:hover { border-color: var(--line); background: var(--card); }

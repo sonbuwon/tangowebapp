@@ -52,7 +52,16 @@ function normalizeDb(raw) {
   db.bookmarks = [...new Set((raw.bookmarks || []).filter(id => used.has(id)))];
   db.lists = (raw.lists || []).filter(m => m && m.name).map(m => ({ name: String(m.name), createdAt: Number(m.createdAt) || 0 }));
   db.listOrder = (raw.listOrder || []).filter(n => typeof n === 'string' && n);
+  pruneListInfo(db);
   return db;
+}
+
+// 단어가 하나도 없는 주제의 정보·순서 제거 (옛 데이터가 남아 이름 변경·최신순 정렬을 방해하지 않도록)
+function pruneListInfo(db) {
+  const names = new Set(db.words.map(w => w.list).filter(Boolean));
+  const seen = new Set();
+  db.lists = db.lists.filter(m => names.has(m.name) && !seen.has(m.name) && seen.add(m.name));
+  db.listOrder = [...new Set(db.listOrder.filter(n => names.has(n)))];
 }
 
 function readDbFile(file) {
@@ -154,6 +163,7 @@ function migrateLegacy() {
   db.lists = Array.isArray(lists) ? lists.filter(m => m && m.name).map(m => ({ name: String(m.name), createdAt: Number(m.createdAt) || 0 })) : [];
   const order = readLocalJson('vocabListOrder', []);
   db.listOrder = Array.isArray(order) ? order.filter(n => typeof n === 'string' && n) : [];
+  pruneListInfo(db);
   return db;
 }
 
@@ -260,6 +270,26 @@ function deleteList(listName) {
   });
 }
 
+// 리스트(주제) 이름 변경 — 소속 단어·주제 정보(생성 시각 유지)·순서를 함께 바꿈. 이미 있는 이름으로는 불가
+function renameList(oldName, newName) {
+  const from = String(oldName || '');
+  const to = String(newName || '').trim();
+  if (!from) return { ok: false, error: '개별 단어는 이름을 바꿀 수 없음' };
+  if (!to) return { ok: false, error: '새 이름 없음' };
+  if (from === to) return { ok: true, renamed: 0 };
+  // 중복 여부는 실제 단어가 있는 주제 기준 (단어 없는 옛 주제 정보는 겹쳐도 지우고 진행)
+  if (db.words.some(w => w.list === to)) return { ok: false, error: '이미 있는 주제 이름' };
+  if (!db.words.some(w => w.list === from)) return { ok: false, error: '해당 주제를 찾지 못함' };
+  return commit(() => {
+    let renamed = 0;
+    db.words.forEach(w => { if (w.list === from) { w.list = to; renamed++; } });
+    db.lists = db.lists.filter(m => m.name !== to);
+    db.lists.forEach(m => { if (m.name === from) m.name = to; });
+    db.listOrder = db.listOrder.filter(n => n !== to).map(n => (n === from ? to : n));
+    return { renamed };
+  });
+}
+
 // 모든 단어 삭제
 function clearWords() {
   return commit(() => { db.words = []; db.bookmarks = []; db.lists = []; db.listOrder = []; });
@@ -312,6 +342,8 @@ contextBridge.exposeInMainWorld('boss', {
   deleteWord: (id) => deleteWord(id),
   // 리스트(주제) 전체 삭제. name='' 이면 개별 리스트 → { ok, removed, error? }
   deleteList: (name) => deleteList(name),
+  // 리스트(주제) 이름 변경 → { ok, renamed, error? }
+  renameList: (oldName, newName) => renameList(oldName, newName),
   // 단어 수정 (ID, 새 값) → { ok, word?, error? }
   updateWord: (id, w) => updateWord(id, w),
   // 전체 삭제 → { ok, error? }

@@ -935,16 +935,18 @@ function makeDeckRow(label, listValue, count, deletable) {
           <button class="deck-up" title="위로">▲</button>
           <button class="deck-down" title="아래로">▼</button>
         </span>
+        <button class="deck-ren" title="이름 변경">✎</button>
         <button class="deck-del" title="주제 삭제">🗑</button>` : ""}
     </span>`;
   d.querySelector(".deck-name").textContent = label;
   d.onclick = () => {
-    if (reorderMode) return;                                       // 순서 변경 중에는 열지 않음
+    if (reorderMode || d.classList.contains("renaming")) return;   // 순서 변경·이름 변경 중에는 열지 않음
     currentList = listValue; setView("vocab");                     // 리스트 선택 → 단어장
   };
   if (deletable) {
     d.dataset.list = listValue;
     d.draggable = reorderMode;
+    d.querySelector(".deck-ren").onclick = (e) => { e.stopPropagation(); startRenameList(d, listValue); };
     d.querySelector(".deck-del").onclick = (e) => { e.stopPropagation(); deleteList(listValue, label); };
     d.querySelector(".deck-up").onclick = (e) => { e.stopPropagation(); moveDeck(d, -1); };
     d.querySelector(".deck-down").onclick = (e) => { e.stopPropagation(); moveDeck(d, 1); };
@@ -1008,6 +1010,61 @@ function dropTarget(wrap, y) {
     const offset = y - box.top - box.height / 2;
     return (offset < 0 && offset > best.offset) ? { offset, el } : best;
   }, { offset: -Infinity, el: null }).el;
+}
+
+/* ===== CSV 리스트(주제) 이름 변경 =====
+   ✎ → 이름 자리에 입력칸. Enter=저장, Esc=취소, 다른 곳 클릭=저장(이름이 비었거나 겹치면 취소) */
+const RESERVED_LIST_NAMES = ["전체", INDIV_LABEL];
+function startRenameList(row, oldName) {
+  if (row.classList.contains("renaming")) return;
+  row.classList.add("renaming");
+  const nameEl = row.querySelector(".deck-name");
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "deck-rename";
+  input.value = oldName;
+  const msg = document.createElement("div");
+  msg.className = "deck-rename-msg";
+  nameEl.textContent = "";
+  nameEl.append(input, msg);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = () => { done = true; renderHome(); };
+  // 저장 시도 → 성공·변경 없음이면 true, 입력이 잘못됐으면 오류 문구를 돌려줌
+  const save = () => {
+    const name = input.value.trim();
+    if (name === oldName) return true;
+    if (!name) return "주제 이름을 입력하세요.";
+    if (RESERVED_LIST_NAMES.includes(name)) return `"${name}"은(는) 쓸 수 없는 이름입니다.`;
+    if (WORDS.some(w => (w.list || "") === name)) return `이미 "${name}" 주제가 있습니다.`;
+    const res = window.boss?.renameList(oldName, name);
+    if (!res || !res.ok) return "이름 변경 실패: " + ((res && res.error) || "알 수 없음");
+    // 메모리 사본도 같이 바꿈 (주제 생성 시각·순서 위치 유지)
+    WORDS.forEach(w => { if ((w.list || "") === oldName) w.list = name; });
+    listMeta = listMeta.filter(m => m.name !== name).map(m => (m.name === oldName ? { ...m, name } : m));
+    listOrder = listOrder.filter(n => n !== name).map(n => (n === oldName ? name : n));
+    if (currentList === oldName) currentList = name;
+    return true;
+  };
+  input.addEventListener("click", (e) => e.stopPropagation());     // 입력칸 클릭이 리스트 열기로 가지 않게
+  input.addEventListener("keydown", (e) => {
+    e.stopPropagation();                                           // Esc 창 숨김 등 전역 단축키 막기
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const r = save();
+      if (r === true) finish();
+      else { msg.textContent = r; input.classList.add("invalid"); input.select(); }   // 입력칸 아래 오류 표시, 계속 편집
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      finish();
+    }
+  });
+  input.addEventListener("blur", () => {
+    if (done) return;
+    save();                                                        // 잘못된 이름이면 저장하지 않고 원래 이름으로
+    finish();
+  });
 }
 
 // CSV 리스트(주제) 전체 삭제 — 소속 단어 전부 제거
