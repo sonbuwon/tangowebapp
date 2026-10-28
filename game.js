@@ -1,7 +1,7 @@
 /* 데이터: 앱 데이터 폴더의 words.json 에서 로드 (preload.js 가 읽어 window.boss.data 로 전달)
    단어 항목: { id(고유 번호), row(오십음 행), kana(히라가나), kanji, mean(한국어 뜻), list(주제),
                ex?:{ jp(한자문장), hira(히라가나문장), kr(한국어해석) } }
-   북마크(단어 ID)·주제 생성 시각·주제 순서도 같은 파일에 저장된다.
+   북마크(단어 ID)·주제 생성 시각·주제 순서·폴더도 같은 파일에 저장된다.
    ▶ 단어 추가는 CSV 가져오기 / 개별 단어 추가, 수정은 단어장의 ✎ 버튼으로. */
 const DATA = (window.boss && window.boss.data) || {};
 // contextBridge 로 넘어온 값은 읽기 전용 → 항목까지 복사해 수정 가능한 사본 사용 (단어 수정 시 제자리 갱신)
@@ -34,6 +34,12 @@ function recordList(name) {                 // CSV 가져오기 시 신규 리�
 let listOrder = (DATA.listOrder || []).slice();
 function loadOrder() { return listOrder.slice(); }
 function saveOrder(a) { listOrder = a.slice(); logSaveError("주제 순서", window.boss?.setListOrder(listOrder)); }
+
+/* ===== 폴더 (홈에서 주제를 묶어 관리, words.json 의 folders) =====
+   [{ name, createdAt, lists: [주제명] }] — 배열 순서 = 홈 표시 순서. 주제는 최대 한 폴더에만 속함 */
+let folders = (DATA.folders || []).map(f => ({ ...f, lists: [...(f.lists || [])] }));
+function saveFolders() { logSaveError("폴더", window.boss?.setFolders(folders)); }
+function folderOf(name) { return folders.find(f => f.lists.includes(name)) || null; }
 
 /* 홈·시험 범위에 공통으로 쓰는 CSV 리스트 정렬.
    순서를 지정한 리스트가 먼저(지정한 순서대로), 아직 지정 안 한 리스트는 그 위에 최신순. */
@@ -891,32 +897,58 @@ function importCsvText(text, title) {
   showAddMsg(`"${listName}"에 ${res.added}개 추가${dupCount ? `, ${dupCount}개 중복 제외` : ""} ✓`, true);
 }
 
-/* ===== 홈 화면 (리스트 목록) ===== */
+/* ===== 홈 화면 (리스트 목록) =====
+   최상위: 전체 · 개별 단어 · 폴더들 · 폴더에 없는 CSV 주제. 폴더를 누르면 그 안의 주제만 보임 (← 로 나감) */
 const homeList = document.getElementById("homeList");
+const homeTitle = document.getElementById("homeTitle");
+const folderBackBtn = document.getElementById("folderBackBtn");
+const newFolderBtn = document.getElementById("newFolderBtn");
 const reorderBtn = document.getElementById("reorderBtn");
 const reorderHint = document.getElementById("reorderHint");
 let reorderMode = false;   // 켜져 있으면 리스트를 열지 않고 순서만 바꿈
+let openFolder = null;     // 홈에서 열어 둔 폴더 이름 (null = 최상위)
 
 function renderHome() {
   homeList.innerHTML = "";
-  // 전체 (최상단) — 모든 단어
-  homeList.appendChild(makeDeckRow("전체", null, WORDS.length, false));
-  // 개별 단어 (전체 바로 아래) — 소속 리스트 없는 단어, 삭제·순서 변경 불가
-  homeList.appendChild(makeDeckRow(INDIV_LABEL, "", indivWords().length, false));
-  // CSV 리스트: 사용자가 지정한 순서(없으면 최신순)
-  const names = orderedListNames();
-  if (names.length < 2) reorderMode = false;          // 바꿀 게 없으면 순서 변경 모드 해제
+  const folder = openFolder === null ? null : folders.find(f => f.name === openFolder);
+  if (!folder) openFolder = null;
+  // CSV 리스트: 사용자가 지정한 순서(없으면 최신순). 폴더 안이면 그 폴더 주제만, 최상위면 폴더에 없는 주제만
+  const names = orderedListNames().filter(n => (folder ? folder.lists.includes(n) : !folderOf(n)));
+  if (!folder) {
+    // 전체 (최상단) — 모든 단어
+    homeList.appendChild(makeDeckRow("전체", null, WORDS.length, false));
+    // 개별 단어 (전체 바로 아래) — 소속 리스트 없는 단어, 삭제·순서 변경 불가
+    homeList.appendChild(makeDeckRow(INDIV_LABEL, "", indivWords().length, false));
+    // 폴더 (개별 단어 아래) — 순서 변경 가능
+    if (folders.length) {
+      const folderWrap = document.createElement("div");
+      folderWrap.id = "folderSortable";
+      folders.forEach(f => folderWrap.appendChild(makeFolderRow(f)));
+      bindDeckSorting(folderWrap, persistFolderOrder);
+      homeList.appendChild(folderWrap);
+    }
+  } else if (!names.length) {
+    const empty = document.createElement("div");
+    empty.className = "folder-empty";
+    empty.textContent = "빈 폴더입니다. 주제의 📁 버튼으로 이 폴더에 옮겨 오세요.";
+    homeList.appendChild(empty);
+  }
+  const canReorder = names.length >= 2 || (!folder && folders.length >= 2);
+  if (!canReorder) reorderMode = false;               // 바꿀 게 없으면 순서 변경 모드 해제
   const sortWrap = document.createElement("div");
   sortWrap.id = "deckSortable";
   names.forEach(name => {
     const count = WORDS.filter(w => (w.list || "") === name).length;
     sortWrap.appendChild(makeDeckRow(name, name, count, true));  // CSV 리스트는 삭제·순서 변경 가능
   });
-  bindDeckSorting(sortWrap);
+  bindDeckSorting(sortWrap, persistDeckOrder);
   homeList.appendChild(sortWrap);
 
   homeList.classList.toggle("reordering", reorderMode);
-  reorderBtn.style.display = names.length >= 2 ? "" : "none";
+  homeTitle.textContent = folder ? folder.name : "리스트";
+  folderBackBtn.style.display = folder ? "" : "none";
+  newFolderBtn.style.display = (folder || reorderMode) ? "none" : "";
+  reorderBtn.style.display = canReorder ? "" : "none";
   reorderBtn.textContent = reorderMode ? "완료" : "순서 변경";
   reorderBtn.classList.toggle("on", reorderMode);
   reorderHint.style.display = reorderMode ? "" : "none";
@@ -935,6 +967,7 @@ function makeDeckRow(label, listValue, count, deletable) {
           <button class="deck-up" title="위로">▲</button>
           <button class="deck-down" title="아래로">▼</button>
         </span>
+        <button class="deck-mv" title="폴더로 이동">📁</button>
         <button class="deck-ren" title="이름 변경">✎</button>
         <button class="deck-del" title="주제 삭제">🗑</button>` : ""}
     </span>`;
@@ -944,21 +977,55 @@ function makeDeckRow(label, listValue, count, deletable) {
     currentList = listValue; setView("vocab");                     // 리스트 선택 → 단어장
   };
   if (deletable) {
-    d.dataset.list = listValue;
+    d.dataset.key = listValue;
     d.draggable = reorderMode;
+    d.querySelector(".deck-mv").onclick = (e) => { e.stopPropagation(); startMoveList(d, listValue); };
     d.querySelector(".deck-ren").onclick = (e) => { e.stopPropagation(); startRenameList(d, listValue); };
     d.querySelector(".deck-del").onclick = (e) => { e.stopPropagation(); deleteList(listValue, label); };
-    d.querySelector(".deck-up").onclick = (e) => { e.stopPropagation(); moveDeck(d, -1); };
-    d.querySelector(".deck-down").onclick = (e) => { e.stopPropagation(); moveDeck(d, 1); };
+    d.querySelector(".deck-up").onclick = (e) => { e.stopPropagation(); moveDeck(d, -1, persistDeckOrder); };
+    d.querySelector(".deck-down").onclick = (e) => { e.stopPropagation(); moveDeck(d, 1, persistDeckOrder); };
   }
   return d;
 }
 
-/* ===== 리스트 순서 변경 ===== */
+// 폴더 행: 누르면 폴더 안으로. 이름 변경·삭제(안의 주제는 남김)·순서 변경 가능
+function makeFolderRow(f) {
+  const d = document.createElement("div");
+  d.className = "deck-row sortable folder-row";
+  const count = WORDS.filter(w => f.lists.includes(w.list || "")).length;
+  d.innerHTML = `
+    <span class="deck-handle" title="끌어서 순서 변경">⠿</span>
+    <span class="deck-name"></span>
+    <span class="deck-right">
+      <span class="deck-count">주제 ${f.lists.length} · ${count}개</span>
+      <span class="deck-move">
+        <button class="deck-up" title="위로">▲</button>
+        <button class="deck-down" title="아래로">▼</button>
+      </span>
+      <button class="deck-ren" title="폴더 이름 변경">✎</button>
+      <button class="deck-del" title="폴더 삭제 (안의 주제는 홈으로)">🗑</button>
+    </span>`;
+  d.querySelector(".deck-name").textContent = f.name;
+  d.dataset.key = f.name;
+  d.draggable = reorderMode;
+  d.onclick = () => {
+    if (reorderMode || d.classList.contains("renaming")) return;
+    openFolder = f.name; renderHome();                             // 폴더 안으로
+  };
+  d.querySelector(".deck-ren").onclick = (e) => { e.stopPropagation(); startRenameFolder(d, f.name); };
+  d.querySelector(".deck-del").onclick = (e) => { e.stopPropagation(); deleteFolder(f.name); };
+  d.querySelector(".deck-up").onclick = (e) => { e.stopPropagation(); moveDeck(d, -1, persistFolderOrder); };
+  d.querySelector(".deck-down").onclick = (e) => { e.stopPropagation(); moveDeck(d, 1, persistFolderOrder); };
+  return d;
+}
+
+folderBackBtn.onclick = () => { openFolder = null; reorderMode = false; renderHome(); };
+
+/* ===== 리스트·폴더 순서 변경 ===== */
 reorderBtn.onclick = () => { reorderMode = !reorderMode; renderHome(); };
 
 // ▲▼ 버튼: 한 칸 이동
-function moveDeck(row, dir) {
+function moveDeck(row, dir, persist) {
   const wrap = row.parentElement;
   if (dir < 0) {
     if (!row.previousElementSibling) return;
@@ -967,33 +1034,41 @@ function moveDeck(row, dir) {
     if (!row.nextElementSibling) return;
     wrap.insertBefore(row.nextElementSibling, row);
   }
-  persistDeckOrder(wrap);
+  persist(wrap);
 }
 
-// 현재 DOM 순서를 저장
+// 현재 DOM 순서를 저장. 화면에 보이는 주제(폴더 안/밖 일부)끼리만 자리를 바꾸고 나머지 주제의 순서는 유지
 function persistDeckOrder(wrap) {
-  saveOrder([...wrap.children].map(el => el.dataset.list).filter(n => n));
+  const visible = [...wrap.children].map(el => el.dataset.key).filter(n => n);
+  const set = new Set(visible);
+  let i = 0;
+  saveOrder(orderedListNames().map(n => (set.has(n) ? visible[i++] : n)));
+}
+function persistFolderOrder(wrap) {
+  const rank = new Map([...wrap.children].map((el, i) => [el.dataset.key, i]));
+  folders.sort((a, b) => rank.get(a.name) - rank.get(b.name));
+  saveFolders();
 }
 
-// 드래그 앤 드롭
+// 드래그 앤 드롭 (같은 묶음 안에서만: 폴더끼리 / 주제끼리)
 let dragRow = null;
-function bindDeckSorting(wrap) {
+function bindDeckSorting(wrap, persist) {
   wrap.querySelectorAll(".deck-row.sortable").forEach(row => {
     row.addEventListener("dragstart", (e) => {
       if (!reorderMode) { e.preventDefault(); return; }
       dragRow = row;
       row.classList.add("dragging");
       e.dataTransfer.effectAllowed = "move";
-      try { e.dataTransfer.setData("text/plain", row.dataset.list || ""); } catch { /* 무시 */ }
+      try { e.dataTransfer.setData("text/plain", row.dataset.key || ""); } catch { /* 무시 */ }
     });
     row.addEventListener("dragend", () => {
       row.classList.remove("dragging");
       dragRow = null;
-      persistDeckOrder(wrap);
+      persist(wrap);
     });
   });
   wrap.addEventListener("dragover", (e) => {
-    if (!dragRow) return;
+    if (!dragRow || dragRow.parentElement !== wrap) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     const after = dropTarget(wrap, e.clientY);
@@ -1012,10 +1087,10 @@ function dropTarget(wrap, y) {
   }, { offset: -Infinity, el: null }).el;
 }
 
-/* ===== CSV 리스트(주제) 이름 변경 =====
-   ✎ → 이름 자리에 입력칸. Enter=저장, Esc=취소, 다른 곳 클릭=저장(이름이 비었거나 겹치면 취소) */
-const RESERVED_LIST_NAMES = ["전체", INDIV_LABEL];
-function startRenameList(row, oldName) {
+/* ===== 이름 변경 (CSV 리스트(주제) · 폴더 공용) =====
+   ✎ → 이름 자리에 입력칸. Enter=저장, Esc=취소, 다른 곳 클릭=저장(이름이 비었거나 겹치면 취소)
+   save(새 이름) → 성공이면 true, 입력이 잘못됐으면 오류 문구 */
+function startInlineRename(row, oldName, save) {
   if (row.classList.contains("renaming")) return;
   row.classList.add("renaming");
   const nameEl = row.querySelector(".deck-name");
@@ -1031,28 +1106,16 @@ function startRenameList(row, oldName) {
   input.select();
   let done = false;
   const finish = () => { done = true; renderHome(); };
-  // 저장 시도 → 성공·변경 없음이면 true, 입력이 잘못됐으면 오류 문구를 돌려줌
-  const save = () => {
+  const trySave = () => {
     const name = input.value.trim();
-    if (name === oldName) return true;
-    if (!name) return "주제 이름을 입력하세요.";
-    if (RESERVED_LIST_NAMES.includes(name)) return `"${name}"은(는) 쓸 수 없는 이름입니다.`;
-    if (WORDS.some(w => (w.list || "") === name)) return `이미 "${name}" 주제가 있습니다.`;
-    const res = window.boss?.renameList(oldName, name);
-    if (!res || !res.ok) return "이름 변경 실패: " + ((res && res.error) || "알 수 없음");
-    // 메모리 사본도 같이 바꿈 (주제 생성 시각·순서 위치 유지)
-    WORDS.forEach(w => { if ((w.list || "") === oldName) w.list = name; });
-    listMeta = listMeta.filter(m => m.name !== name).map(m => (m.name === oldName ? { ...m, name } : m));
-    listOrder = listOrder.filter(n => n !== name).map(n => (n === oldName ? name : n));
-    if (currentList === oldName) currentList = name;
-    return true;
+    return name === oldName ? true : save(name);
   };
   input.addEventListener("click", (e) => e.stopPropagation());     // 입력칸 클릭이 리스트 열기로 가지 않게
   input.addEventListener("keydown", (e) => {
     e.stopPropagation();                                           // Esc 창 숨김 등 전역 단축키 막기
     if (e.key === "Enter") {
       e.preventDefault();
-      const r = save();
+      const r = trySave();
       if (r === true) finish();
       else { msg.textContent = r; input.classList.add("invalid"); input.select(); }   // 입력칸 아래 오류 표시, 계속 편집
     } else if (e.key === "Escape") {
@@ -1062,9 +1125,107 @@ function startRenameList(row, oldName) {
   });
   input.addEventListener("blur", () => {
     if (done) return;
-    save();                                                        // 잘못된 이름이면 저장하지 않고 원래 이름으로
+    trySave();                                                     // 잘못된 이름이면 저장하지 않고 원래 이름으로
     finish();
   });
+}
+
+const RESERVED_LIST_NAMES = ["전체", INDIV_LABEL];
+function startRenameList(row, oldName) {
+  startInlineRename(row, oldName, (name) => {
+    if (!name) return "주제 이름을 입력하세요.";
+    if (RESERVED_LIST_NAMES.includes(name)) return `"${name}"은(는) 쓸 수 없는 이름입니다.`;
+    if (WORDS.some(w => (w.list || "") === name)) return `이미 "${name}" 주제가 있습니다.`;
+    const res = window.boss?.renameList(oldName, name);
+    if (!res || !res.ok) return "이름 변경 실패: " + ((res && res.error) || "알 수 없음");
+    // 메모리 사본도 같이 바꿈 (주제 생성 시각·순서 위치·소속 폴더 유지)
+    WORDS.forEach(w => { if ((w.list || "") === oldName) w.list = name; });
+    listMeta = listMeta.filter(m => m.name !== name).map(m => (m.name === oldName ? { ...m, name } : m));
+    listOrder = listOrder.filter(n => n !== name).map(n => (n === oldName ? name : n));
+    folders.forEach(f => { f.lists = f.lists.filter(n => n !== name).map(n => (n === oldName ? name : n)); });
+    if (currentList === oldName) currentList = name;
+    return true;
+  });
+}
+
+function startRenameFolder(row, oldName) {
+  startInlineRename(row, oldName, (name) => {
+    if (!name) return "폴더 이름을 입력하세요.";
+    if (folders.some(f => f.name === name)) return `이미 "${name}" 폴더가 있습니다.`;
+    const f = folders.find(x => x.name === oldName);
+    if (!f) return true;
+    f.name = name;
+    if (openFolder === oldName) openFolder = name;
+    saveFolders();
+    return true;
+  });
+}
+
+/* ===== 폴더 만들기 / 삭제 / 주제 옮기기 ===== */
+newFolderBtn.onclick = () => createFolder([]);
+
+// 새 폴더를 맨 아래에 만들고 바로 이름 입력. lists 를 주면 그 주제들을 새 폴더로 옮김
+function createFolder(lists) {
+  let name = "새 폴더";
+  for (let n = 2; folders.some(f => f.name === name); n++) name = `새 폴더 ${n}`;
+  folders.forEach(f => { f.lists = f.lists.filter(x => !lists.includes(x)); });   // 주제는 한 폴더에만
+  folders.push({ name, createdAt: Date.now(), lists: lists.slice() });
+  saveFolders();
+  openFolder = null;
+  reorderMode = false;
+  renderHome();
+  const row = [...homeList.querySelectorAll(".folder-row")].find(r => r.dataset.key === name);
+  if (row) { row.scrollIntoView({ block: "nearest" }); startRenameFolder(row, name); }
+}
+
+// 폴더만 삭제 — 안의 주제(단어)는 지우지 않고 최상위로 나옴
+function deleteFolder(name) {
+  const f = folders.find(x => x.name === name);
+  if (!f) return;
+  if (f.lists.length && !confirm(`"${name}" 폴더를 삭제할까요?\n안의 주제 ${f.lists.length}개는 지워지지 않고 홈으로 옮겨집니다.`)) return;
+  folders = folders.filter(x => x !== f);
+  saveFolders();
+  renderHome();
+}
+
+// 📁 → 버튼 자리에 폴더 선택칸. 고르면 옮김, Esc·다른 곳 클릭=취소
+const MOVE_ROOT = "\u0000root";
+const MOVE_NEW = "\u0000new";
+function startMoveList(row, name) {
+  if (row.classList.contains("renaming")) return;
+  row.classList.add("renaming");                                   // 고르는 중에는 리스트를 열지 않음
+  const sel = document.createElement("select");
+  sel.className = "deck-move-sel";
+  [[MOVE_ROOT, "폴더 없음 (홈)"], ...folders.map(f => [f.name, "📁 " + f.name]), [MOVE_NEW, "+ 새 폴더 만들기"]]
+    .forEach(([value, text]) => {
+      const o = document.createElement("option");
+      o.value = value;
+      o.textContent = text;
+      sel.appendChild(o);
+    });
+  const cur = folderOf(name);
+  sel.value = cur ? cur.name : MOVE_ROOT;
+  const right = row.querySelector(".deck-right");
+  right.innerHTML = "";
+  right.appendChild(sel);
+  sel.focus();
+  try { sel.showPicker(); } catch { /* 지원 안 하면 클릭해서 열기 */ }
+  let done = false;
+  const finish = () => { if (done) return; done = true; renderHome(); };
+  sel.addEventListener("click", (e) => e.stopPropagation());
+  sel.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Escape") { e.preventDefault(); finish(); }
+  });
+  sel.addEventListener("change", () => {
+    if (sel.value === MOVE_NEW) { done = true; createFolder([name]); return; }
+    folders.forEach(f => { f.lists = f.lists.filter(x => x !== name); });
+    const target = folders.find(f => f.name === sel.value);
+    if (target) target.lists.push(name);
+    saveFolders();
+    finish();
+  });
+  sel.addEventListener("blur", finish);
 }
 
 // CSV 리스트(주제) 전체 삭제 — 소속 단어 전부 제거
@@ -1076,13 +1237,14 @@ function deleteList(name, label) {
   for (let i = WORDS.length - 1; i >= 0; i--) {
     if ((WORDS[i].list || "") === name) WORDS.splice(i, 1);
   }
-  // 저장소(words.json)는 삭제한 단어의 북마크·주제 정보·순서를 이미 정리함 → 메모리 사본만 맞춤
+  // 저장소(words.json)는 삭제한 단어의 북마크·주제 정보·순서·폴더 소속을 이미 정리함 → 메모리 사본만 맞춤
   // (다른 주제의 같은 단어는 ID 가 달라 북마크가 그대로 유지됨)
   const remain = new Set(WORDS.map(w => w.id));
   for (const id of [...bookmarks]) if (!remain.has(id)) bookmarks.delete(id);
   updateBmCount();
   listMeta = listMeta.filter(m => m.name !== name);     // 리스트 메타 제거
   listOrder = listOrder.filter(n => n !== name);        // 저장된 순서에서도 제거
+  folders.forEach(f => { f.lists = f.lists.filter(n => n !== name); });   // 폴더에서도 빼기
   if (currentList === name) currentList = null;
   updateIndivCount();
   renderHome();

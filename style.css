@@ -325,12 +325,16 @@ html, body {
 .home-title {
   font-size: .74rem; color: var(--sub); font-weight: 700; letter-spacing: 1px;
 }
-#reorderBtn {
+/* 폴더 안에 있을 때: ← 뒤로 + 폴더 이름 */
+.home-head-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.home-head-left .home-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-head-btns { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+#reorderBtn, #newFolderBtn, #folderBackBtn {
   padding: 4px 10px; border: 1px solid var(--line); border-radius: 7px;
   background: var(--card); color: var(--sub);
   font-size: .72rem; font-weight: 700; cursor: pointer; transition: .15s;
 }
-#reorderBtn:hover { border-color: var(--accent); color: var(--text); }
+#reorderBtn:hover, #newFolderBtn:hover, #folderBackBtn:hover { border-color: var(--accent); color: var(--text); }
 #reorderBtn.on { background: var(--accent-light); color: var(--text); border-color: var(--accent); }
 #reorderHint {
   font-size: .68rem; color: var(--sub); margin: -4px 2px 8px;
@@ -367,6 +371,21 @@ html, body {
 .deck-rename-msg { font-size: .74rem; font-weight: 600; color: #e06b6b; margin-top: 4px; }
 .deck-rename-msg:empty { display: none; }
 .deck-row.renaming { cursor: default; }
+/* 폴더 행 + 주제를 폴더로 옮기는 버튼·선택칸 */
+.folder-row .deck-name::before { content: "📁"; margin-right: 8px; }
+.deck-mv {
+  width: 28px; height: 28px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--accent-soft); color: var(--sub);
+  font-size: .8rem; line-height: 1; transition: .15s;
+}
+.deck-mv:hover { color: var(--text); border-color: var(--accent); }
+.deck-move-sel {
+  max-width: 150px; background: var(--bg); color: var(--text);
+  border: 1px solid var(--accent); border-radius: 7px;
+  padding: 4px 6px; font-size: .8rem; font-weight: 600; font-family: inherit; outline: none;
+}
+.deck-move-sel option { background: var(--card); color: var(--text); }
+.folder-empty { font-size: .8rem; color: var(--sub); text-align: center; padding: 24px 0; }
 .deck-row.renaming .deck-name { margin-right: 10px; }
 
 /* 순서 변경 모드 — 평소에는 손잡이·▲▼ 숨김 */
@@ -385,7 +404,7 @@ html, body {
 
 #homeList.reordering .deck-handle { display: inline-block; }
 #homeList.reordering .deck-move { display: inline-flex; }
-#homeList.reordering .deck-del, #homeList.reordering .deck-ren { display: none; }
+#homeList.reordering .deck-del, #homeList.reordering .deck-ren, #homeList.reordering .deck-mv { display: none; }
 #homeList.reordering .deck-count { display: none; }
 #homeList.reordering .deck-row { cursor: default; }
 #homeList.reordering .deck-row:hover { border-color: var(--line); background: var(--card); }

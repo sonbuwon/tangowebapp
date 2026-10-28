@@ -10,6 +10,7 @@ const path = require('path');
      bookmarks: [단어 ID],
      lists: [{ name, createdAt }],     // 주제 생성 시각 (홈 최신순 정렬용)
      listOrder: [주제명],              // 홈에서 사용자가 지정한 주제 순서
+     folders: [{ name, createdAt, lists: [주제명] }],   // 홈의 폴더 (배열 순서 = 표시 순서). 주제는 최대 한 폴더에만 속함
    }
    단어는 고유 ID 로 구분 → 같은 단어가 여러 주제에 있어도, 단어를 수정해도 북마크가 어긋나지 않음.
    저장은 임시 파일에 쓴 뒤 교체(직전 파일은 .bak 으로 보관) → 저장 중 꺼져도 파일이 깨지지 않음.
@@ -25,7 +26,7 @@ const BAK_FILE = DB_FILE + '.bak';
 const TMP_FILE = DB_FILE + '.tmp';
 
 function emptyDb() {
-  return { version: 1, nextId: 1, words: [], bookmarks: [], lists: [], listOrder: [] };
+  return { version: 1, nextId: 1, words: [], bookmarks: [], lists: [], listOrder: [], folders: [] };
 }
 
 // 저장할 단어 형태로 정리 (예문은 일본어 문장이 있을 때만)
@@ -52,8 +53,20 @@ function normalizeDb(raw) {
   db.bookmarks = [...new Set((raw.bookmarks || []).filter(id => used.has(id)))];
   db.lists = (raw.lists || []).filter(m => m && m.name).map(m => ({ name: String(m.name), createdAt: Number(m.createdAt) || 0 }));
   db.listOrder = (raw.listOrder || []).filter(n => typeof n === 'string' && n);
+  db.folders = cleanFolders(raw.folders);
   pruneListInfo(db);
   return db;
+}
+
+// 폴더 목록 정리: 이름 없는·중복 이름 폴더 제거, 한 주제가 여러 폴더에 있으면 앞 폴더에만 남김
+function cleanFolders(folders) {
+  const names = new Set();
+  const placed = new Set();
+  return (Array.isArray(folders) ? folders : []).filter(f => f && String(f.name || '').trim()).map(f => ({
+    name: String(f.name).trim(),
+    createdAt: Number(f.createdAt) || 0,
+    lists: (Array.isArray(f.lists) ? f.lists : []).filter(n => typeof n === 'string' && n && !placed.has(n) && placed.add(n)),
+  })).filter(f => !names.has(f.name) && names.add(f.name));
 }
 
 // 단어가 하나도 없는 주제의 정보·순서 제거 (옛 데이터가 남아 이름 변경·최신순 정렬을 방해하지 않도록)
@@ -62,6 +75,7 @@ function pruneListInfo(db) {
   const seen = new Set();
   db.lists = db.lists.filter(m => names.has(m.name) && !seen.has(m.name) && seen.add(m.name));
   db.listOrder = [...new Set(db.listOrder.filter(n => names.has(n)))];
+  db.folders.forEach(f => { f.lists = f.lists.filter(n => names.has(n)); });   // 빈 폴더는 그대로 둠
 }
 
 function readDbFile(file) {
@@ -265,6 +279,7 @@ function deleteList(listName) {
     if (target) {
       db.lists = db.lists.filter(m => m.name !== target);
       db.listOrder = db.listOrder.filter(n => n !== target);
+      db.folders.forEach(f => { f.lists = f.lists.filter(n => n !== target); });
     }
     return { removed: ids.length };
   });
@@ -286,13 +301,17 @@ function renameList(oldName, newName) {
     db.lists = db.lists.filter(m => m.name !== to);
     db.lists.forEach(m => { if (m.name === from) m.name = to; });
     db.listOrder = db.listOrder.filter(n => n !== to).map(n => (n === from ? to : n));
+    db.folders.forEach(f => { f.lists = f.lists.filter(n => n !== to).map(n => (n === from ? to : n)); });
     return { renamed };
   });
 }
 
 // 모든 단어 삭제
 function clearWords() {
-  return commit(() => { db.words = []; db.bookmarks = []; db.lists = []; db.listOrder = []; });
+  return commit(() => {
+    db.words = []; db.bookmarks = []; db.lists = []; db.listOrder = [];
+    db.folders.forEach(f => { f.lists = []; });                // 폴더는 남기고 비움
+  });
 }
 
 // 북마크 / 주제 정보 / 주제 순서 통째로 저장 (렌더러가 가진 현재 상태)
@@ -310,6 +329,13 @@ function setLists(lists) {
 function setListOrder(names) {
   return commit(() => { db.listOrder = (names || []).filter(n => typeof n === 'string' && n); });
 }
+// 폴더 전체(이름·순서·소속 주제) 저장. 단어가 없는 주제 이름은 제외
+function setFolders(folders) {
+  return commit(() => {
+    db.folders = cleanFolders(folders);
+    pruneListInfo(db);
+  });
+}
 
 // 렌더러(게임)에서 안전하게 호출할 수 있는 최소한의 다리
 contextBridge.exposeInMainWorld('boss', {
@@ -326,8 +352,8 @@ contextBridge.exposeInMainWorld('boss', {
   timerStart: (sec) => ipcRenderer.send('timer:start', sec),
   // 구글 음성(온라인) MP3 받아오기 → Promise<Uint8Array|null>
   tts: (text) => ipcRenderer.invoke('boss:tts', text),
-  // words.json 에서 읽어온 시작 시점 데이터 { words, bookmarks, lists, listOrder }
-  data: { words: db.words, bookmarks: db.bookmarks, lists: db.lists, listOrder: db.listOrder },
+  // words.json 에서 읽어온 시작 시점 데이터 { words, bookmarks, lists, listOrder, folders }
+  data: { words: db.words, bookmarks: db.bookmarks, lists: db.lists, listOrder: db.listOrder, folders: db.folders },
   // 저장 파일 위치 (안내 표시용)
   dataFile: DB_FILE,
   // 새 단어 한 개 추가 → { ok, word?, error? } (같은 주제에 이미 있으면 ok:false)
@@ -352,4 +378,6 @@ contextBridge.exposeInMainWorld('boss', {
   setBookmarks: (ids) => setBookmarks(ids),
   setLists: (lists) => setLists(lists),
   setListOrder: (names) => setListOrder(names),
+  // 폴더 [{ name, createdAt, lists }] 저장 → { ok, error? }
+  setFolders: (folders) => setFolders(folders),
 });

@@ -20,8 +20,14 @@
   <div id="homeScreen" class="screen">
     <div id="homeWrap">
       <div class="home-head">
-        <div class="home-title">리스트</div>
-        <button type="button" id="reorderBtn" style="display:none">순서 변경</button>
+        <span class="home-head-left">
+          <button type="button" id="folderBackBtn" style="display:none" title="폴더 밖으로">←</button>
+          <span class="home-title" id="homeTitle">리스트</span>
+        </span>
+        <span class="home-head-btns">
+          <button type="button" id="newFolderBtn" title="새 폴더 만들기">+ 폴더</button>
+          <button type="button" id="reorderBtn" style="display:none">순서 변경</button>
+        </span>
       </div>
       <div id="reorderHint" style="display:none">끌어서 놓거나 ▲▼ 로 순서를 바꾸세요</div>
       <div id="homeList"></div>
