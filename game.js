@@ -205,6 +205,7 @@ function showCard(keepReveal = true) {
     document.getElementById("fcProgress").textContent = "0 / 0";
     bm.style.display = "none";
     fcEdit.style.display = "none";
+    fcCopy.style.display = "none";
     fcSpeak.style.display = "none";
     fcSpeakEx.style.display = "none";
     stopSpeak();
@@ -212,6 +213,7 @@ function showCard(keepReveal = true) {
   }
   bm.style.display = "flex";
   fcEdit.style.display = "flex";
+  fcCopy.style.display = "flex";
   // 설정 '음성 기능' 이 꺼져 있으면 읽어주기 버튼 숨김
   fcSpeak.style.display = speechOn ? "flex" : "none";
   fcSpeakEx.style.display = speechOn ? "flex" : "none";
@@ -219,6 +221,8 @@ function showCard(keepReveal = true) {
   stopSpeak();                                   // 카드가 바뀌면 재생 중이던 음성 중단
   fcSpeak.disabled = !wordText(w);               // 읽을 히라가나가 없으면 비활성
   fcSpeakEx.disabled = !exText(w);               // 히라가나 예문이 없으면 비활성
+  fcCopy.disabled = !copyText(w);                // 복사할 예문이 없으면 비활성
+  fcCopy.classList.remove("done"); fcCopy.textContent = "C";   // 다른 카드로 넘어가면 복사 완료 표시 해제
   // 펼친 상태(히라가나·뜻 보임)는 다음/이전 카드로 넘겨도 유지. 덱을 새로 만들 때만(renderFlash) 접힘으로 초기화
   if (!keepReveal) fc.classList.remove("revealed");
   document.getElementById("fcKana").textContent = w.kanji || w.kana;  // 상단: 한자 우선
@@ -428,6 +432,40 @@ document.getElementById("fcBookmark").onclick = (e) => {
 // 플래시카드 수정 버튼 (E 키) → 현재 카드 단어 수정 창
 const fcEdit = document.getElementById("fcEdit");
 fcEdit.onclick = (e) => { e.stopPropagation(); if (deck.length) openEdit(deck[idx]); };
+// 플래시카드 예문 복사 버튼 (C) → 일본어 문장 / 히라가나 문장 / 문장 한국어 뜻을 줄바꿈으로 이어 클립보드에 복사
+const fcCopy = document.getElementById("fcCopy");
+function copyText(w) {
+  const ex = (w && w.ex) || {};
+  return [ex.jp, ex.hira, ex.kr].map(t => (t || "").trim()).filter(Boolean).join("\n");
+}
+function writeClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+  }
+  return Promise.resolve(fallbackCopy(text));
+}
+// clipboard API 를 못 쓰는 환경용: 임시 textarea 선택 후 execCommand('copy')
+function fallbackCopy(text) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand("copy"); } finally { ta.remove(); }
+}
+let fcCopyTimer = null;
+fcCopy.onclick = (e) => {
+  e.stopPropagation();
+  if (!deck.length) return;
+  const text = copyText(deck[idx]);
+  if (!text) return;
+  writeClipboard(text).then(() => {
+    // 복사 완료 표시를 잠깐 보여 줌
+    fcCopy.classList.add("done"); fcCopy.textContent = "✓";
+    clearTimeout(fcCopyTimer);
+    fcCopyTimer = setTimeout(() => { fcCopy.classList.remove("done"); fcCopy.textContent = "C"; }, 1000);
+  });
+};
 
 /* ===== 행 / 북마크 필터 ===== */
 document.querySelectorAll(".row-btn[data-row]").forEach(b => {

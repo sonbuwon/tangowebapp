@@ -748,6 +748,10 @@ html, body {
 /* 단어 수정 버튼: 북마크 버튼 왼쪽 (목록 카드 / 플래시카드) */
 .ed-btn { right: 40px; font-size: .9rem; }
 .fc-edit { position: absolute; top: 10px; right: 44px; z-index: 3; font-size: .9rem; }
+/* 예문 복사 버튼: 수정 버튼 왼쪽 (플래시카드) */
+.fc-copy { position: absolute; top: 10px; right: 78px; z-index: 3; font-size: .85rem; font-weight: 700; }
+.fc-copy.done { background: #1e4a2a; color: #6bff9a; border-color: #2a6b3a; }
+.fc-copy:disabled { opacity: .35; cursor: default; }
 
 /* ===== 단어 수정 창 (상단 드래그 바 아래를 덮는 모달) ===== */
 #editModal {
