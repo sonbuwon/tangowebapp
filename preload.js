@@ -340,6 +340,8 @@ function setFolders(folders) {
 // 렌더러(게임)에서 안전하게 호출할 수 있는 최소한의 다리
 contextBridge.exposeInMainWorld('boss', {
   hide: () => ipcRenderer.send('boss:hide'),
+  // 입력칸(input·textarea 등) 포커스 여부 알림 → 메인이 IME 열림(히라가나)/닫힘(직접 입력) 전환
+  imeEditable: (on) => ipcRenderer.send('ime:editable', !!on),
   // 세로 늘리기 단계 순환 → Promise<number> (0=기본, 1=좀 더 길게, 2=꽉 채움)
   fitHeight: () => ipcRenderer.invoke('boss:fitHeight'),
   // 전체 단어 JSON 내보내기 (저장 대화상자) → Promise<{ ok, path?, canceled?, error? }>

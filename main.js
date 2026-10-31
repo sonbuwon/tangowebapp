@@ -145,9 +145,17 @@ function createWindow() {
 
 let winHwnd = '';           // 입력기 전환용 창 핸들
 let imeTimer = null;
+// 렌더러의 입력칸(input·textarea 등)에 포커스가 있는지. 있을 때만 IME 를 열어(히라가나) 두고
+// 없으면 닫아(직접 입력) 플래시카드·시험 화면의 S·D·B 등 단축키가 IME 에 먹히지 않게 한다
+let editableFocused = false;
 function scheduleIme(lang) {
   clearTimeout(imeTimer);
-  imeTimer = setTimeout(() => ime.set(lang, winHwnd), 120);
+  imeTimer = setTimeout(() => ime.set(lang, winHwnd, editableFocused), 120);
+}
+function setImeEditable(on) {
+  editableFocused = !!on;
+  if (!AUTO_IME || !win || win.isDestroyed() || !win.isFocused()) return;   // 창이 뒤에 있으면 focus 때 반영
+  ime.set('open', winHwnd, editableFocused);
 }
 
 // 창 + 내부 웹페이지까지 키보드 포커스를 확실히 가져옴
@@ -442,6 +450,8 @@ app.whenReady().then(() => {
 
   // 렌더러(게임 화면)에서 Esc를 누르면 숨김 요청이 옴
   ipcMain.on('boss:hide', () => hide());   // 이벤트 객체가 all 인자로 넘어가지 않게
+  // 렌더러에서 입력칸 포커스가 바뀌었을 때 (true=입력칸에 포커스 → IME 열림)
+  ipcMain.on('ime:editable', (_e, on) => setImeEditable(on));
   // 제목 표시줄 '세로 늘리기' 버튼 → 다음 단계로 바꾼 뒤 현재 단계(0=기본, 1=좀 더 길게, 2=꽉 채움) 반환
   ipcMain.handle('boss:fitHeight', () => toggleFitHeight());
   // 타이머: 본 창 설정 화면의 '시작' (초 단위) / 타이머 창 버튼 ('toggle' | 'restart' | 'stop')

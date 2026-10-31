@@ -510,6 +510,24 @@ document.getElementById("hideKana").onclick = () => {
 };
 
 /* ===== 키보드 ===== */
+/* 입력기(IME) 열림/닫힘: 입력칸(input·textarea 등)에 포커스가 있을 때만 일본어 입력(히라가나),
+   그 밖(플래시카드·시험 결과 등)에서는 직접 입력(영숫자)으로 두어 S·D·B 같은 단축키가 IME 에 먹히지 않게 한다.
+   (메인 프로세스가 창 포커스 때 일본어 자판으로 바꾸고, 여기서 알린 상태로 열림/닫힘을 맞춘다) */
+const isEditable = el => !!el && (
+  (el.tagName === "INPUT" && !/^(button|checkbox|radio|range|submit|reset|file|color)$/i.test(el.type)) ||
+  el.tagName === "TEXTAREA" || el.isContentEditable);
+let imeEditableLast = null;
+const reportImeEditable = () => {
+  const on = isEditable(document.activeElement);
+  if (on === imeEditableLast) return;
+  imeEditableLast = on;
+  window.boss?.imeEditable?.(on);
+};
+document.addEventListener("focusin", reportImeEditable);
+document.addEventListener("focusout", () => setTimeout(reportImeEditable, 0));   // 다음 포커스가 정해진 뒤 판단
+window.addEventListener("focus", () => { imeEditableLast = null; reportImeEditable(); });
+reportImeEditable();
+
 /* 일본어 입력기(IME)가 켜져 있으면 문자·숫자 키가 IME 를 거치면서 e.key 가 "Process" 로 들어와
    "s"·"d"·"b"·"1" 같은 비교가 전부 실패한다. 그런 경우 물리 키(e.code: KeyS·Digit1·Numpad1…)로 판별. */
 const keyOf = e => {
@@ -519,7 +537,7 @@ const keyOf = e => {
   return e.code === "NumpadEnter" ? "Enter" : e.code;
 };
 document.addEventListener("keydown", e => {
-  if (e.isComposing) return;           // 입력칸에서 IME 조합(변환) 중인 키는 건드리지 않음
+  if (e.isComposing && isEditable(e.target)) return;   // 입력칸에서 IME 조합(변환) 중인 키는 건드리지 않음
   const key = keyOf(e);
   if (e.key === "Escape") {            // Esc → 창 즉시 숨김 (Electron). 단어 수정 창이 열려 있으면 창만 닫음
     if (isEditOpen()) closeEdit();

@@ -36,7 +36,7 @@ public static class Gm6Ime {
     IntPtr r;
     SendMessageTimeout(ime, WM_IME_CONTROL, new IntPtr(cmd), new IntPtr(value), SMTO_ABORTIFHUNG, 300, out r);
   }
-  static string Apply(IntPtr hwnd, int lang, int mode) {
+  static string Apply(IntPtr hwnd, int lang, int mode, int open) {
     if (hwnd == IntPtr.Zero) return "no-window";
     IntPtr hkl = FindLayout(lang);
     if (hkl == IntPtr.Zero) return "no-layout";
@@ -44,18 +44,26 @@ public static class Gm6Ime {
     Thread.Sleep(120);                // 입력기 전환이 반영된 뒤에 변환 모드 설정
     IntPtr ime = ImmGetDefaultIMEWnd(hwnd);
     if (ime == IntPtr.Zero) return "no-ime";
-    ImeControl(ime, IMC_SETOPENSTATUS, 1);
     ImeControl(ime, IMC_SETCONVERSIONMODE, mode);
+    ImeControl(ime, IMC_SETOPENSTATUS, open);
     return "ok";
   }
-  // 우리 창 → 일본어 히라가나
-  public static string Ja(long self) { return Apply(new IntPtr(self), LANG_JA, MODE_HIRAGANA); }
+  // 우리 창 → 일본어 자판. open=1 이면 히라가나 입력, 0 이면 직접 입력(영숫자)
+  //   입력칸에 포커스가 없을 때는 닫아 두어야 S·D·B 같은 단축키가 IME 에 먹히지 않는다
+  public static string Ja(long self, int open) { return Apply(new IntPtr(self), LANG_JA, MODE_HIRAGANA, open); }
+  // 우리 창의 IME 열림(1=히라가나 입력)/닫힘(0=직접 입력)만 바꿈 (자판은 그대로)
+  public static string Open(long self, int open) {
+    IntPtr ime = ImmGetDefaultIMEWnd(new IntPtr(self));
+    if (ime == IntPtr.Zero) return "no-ime";
+    ImeControl(ime, IMC_SETOPENSTATUS, open);
+    return "ok";
+  }
   // 포커스가 넘어간 창 → 한국어 한글 (그 사이 우리 창이 다시 포커스를 받았으면 건너뜀)
   public static string Ko(long self) {
     Thread.Sleep(150);
     IntPtr fg = GetForegroundWindow();
     if (fg == new IntPtr(self)) return "skip";
-    return Apply(fg, LANG_KO, MODE_HANGUL);
+    return Apply(fg, LANG_KO, MODE_HANGUL, 1);
   }
 }
 '@
@@ -63,7 +71,9 @@ public static class Gm6Ime {
 while ($null -ne ($line = [Console]::In.ReadLine())) {
   $p = $line.Split(' ')
   try {
-    if ($p[0] -eq 'ja') { $r = [Gm6Ime]::Ja([long]$p[1]) } else { $r = [Gm6Ime]::Ko([long]$p[1]) }
+    if ($p[0] -eq 'ja') { $r = [Gm6Ime]::Ja([long]$p[1], [int]$p[2]) }
+    elseif ($p[0] -eq 'open') { $r = [Gm6Ime]::Open([long]$p[1], [int]$p[2]) }
+    else { $r = [Gm6Ime]::Ko([long]$p[1]) }
   } catch { $r = 'error ' + $_.Exception.Message }
   [Console]::Out.WriteLine($p[0] + ' ' + $r)
 }
@@ -106,15 +116,16 @@ function start() {
   });
 }
 
-// lang: 'ja' | 'ko', hwnd: 우리 창 핸들(문자열 숫자) → Promise<응답 줄 | null>
-function set(lang, hwnd, timeoutMs = 1500) {
+// cmd: 'ja' | 'ko' | 'open', hwnd: 우리 창 핸들(문자열 숫자) → Promise<응답 줄 | null>
+//   'ja'·'open' 은 세 번째 인자로 IME 열림 여부(true=히라가나 입력, false=직접 입력)를 받음
+function set(cmd, hwnd, open, timeoutMs = 1500) {
   if (!proc || !hwnd) return Promise.resolve(null);
   return new Promise((resolve) => {
     let done = false;
     const finish = (v) => { if (!done) { done = true; resolve(v); } };
     waiters.push(finish);                 // 시간 초과돼도 자리는 남겨 두어 응답 순서를 유지
     setTimeout(() => finish(null), timeoutMs);
-    proc.stdin.write(`${lang} ${hwnd}\n`);
+    proc.stdin.write(cmd === 'ko' ? `ko ${hwnd}\n` : `${cmd} ${hwnd} ${open ? 1 : 0}\n`);
   });
 }
 
