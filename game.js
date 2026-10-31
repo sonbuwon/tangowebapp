@@ -510,7 +510,17 @@ document.getElementById("hideKana").onclick = () => {
 };
 
 /* ===== 키보드 ===== */
+/* 일본어 입력기(IME)가 켜져 있으면 문자·숫자 키가 IME 를 거치면서 e.key 가 "Process" 로 들어와
+   "s"·"d"·"b"·"1" 같은 비교가 전부 실패한다. 그런 경우 물리 키(e.code: KeyS·Digit1·Numpad1…)로 판별. */
+const keyOf = e => {
+  if (e.key !== "Process" && e.key !== "Unidentified") return e.key;
+  const m = /^(?:Key|Digit|Numpad)(\w)$/.exec(e.code);
+  if (m) return m[1].toLowerCase();
+  return e.code === "NumpadEnter" ? "Enter" : e.code;
+};
 document.addEventListener("keydown", e => {
+  if (e.isComposing) return;           // 입력칸에서 IME 조합(변환) 중인 키는 건드리지 않음
+  const key = keyOf(e);
   if (e.key === "Escape") {            // Esc → 창 즉시 숨김 (Electron). 단어 수정 창이 열려 있으면 창만 닫음
     if (isEditOpen()) closeEdit();
     else window.boss?.hide();
@@ -526,21 +536,21 @@ document.addEventListener("keydown", e => {
   if (isEditOpen()) return;
   // 무한 테스트 진행 중: 1~4 보기 선택, Enter 다음 문제, B 북마크 토글
   if (curView === "quiz" && quizInf.style.display !== "none") {
-    if (/^[1-4]$/.test(e.key)) {
+    if (/^[1-4]$/.test(key)) {
       const grid = infStep === 0 ? infKanaChoices : infStep === 1 ? infMeanChoices : null;
-      const b = grid && grid.children[Number(e.key) - 1];
+      const b = grid && grid.children[Number(key) - 1];
       if (b) { e.preventDefault(); b.click(); }
       return;
     }
-    if (e.key === "Enter" && infStep === 2 && document.activeElement !== quizInfNext) {
+    if (key === "Enter" && infStep === 2 && document.activeElement !== quizInfNext) {
       e.preventDefault(); nextInfQuestion(); return;   // 버튼에 포커스가 있으면 기본 클릭으로 처리됨
     }
-    if ((e.key === "b" || e.key === "B") && infStep === 2) { quizInfBookmark.click(); return; }
+    if ((key === "b" || key === "B") && infStep === 2) { e.preventDefault(); quizInfBookmark.click(); return; }
     return;
   }
   // 입력 테스트 채점 후: S → 단어 듣기, D → 예문 듣기 (답 입력 중에는 동작 안 함)
-  if (curView === "quiz" && quizAnswered && /^[sdSD]$/.test(e.key) && !e.ctrlKey && !e.altKey) {
-    const b = quizResult.querySelector(`.quiz-speak[data-key="${e.key.toLowerCase()}"]`);
+  if (curView === "quiz" && quizAnswered && /^[sdSD]$/.test(key) && !e.ctrlKey && !e.altKey) {
+    const b = quizResult.querySelector(`.quiz-speak[data-key="${key.toLowerCase()}"]`);
     if (b && b.offsetParent) { e.preventDefault(); b.click(); }   // 화면에 보일 때만 (다른 시험 화면으로 나간 경우 제외)
     return;
   }
@@ -555,12 +565,12 @@ document.addEventListener("keydown", e => {
     fcShowEx.checked = !fcShowEx.checked;
     fcShowEx.dispatchEvent(new Event("change"));
   }
-  if (e.key === "b" || e.key === "B") document.getElementById("fcBookmark").click();
+  if (key === "b" || key === "B") { e.preventDefault(); document.getElementById("fcBookmark").click(); }
   // E → 현재 카드 단어 수정 (기본 입력 막기: 열린 창의 첫 칸에 'e' 가 들어가지 않도록)
-  if ((e.key === "e" || e.key === "E") && !e.ctrlKey && !e.altKey) { e.preventDefault(); fcEdit.click(); }
-  if (e.key === "s" || e.key === "S") speakWord();         // S → 단어(히라가나) 읽어주기
-  if (e.key === "d" || e.key === "D") speakEx();            // D → 예문(히라가나 문장) 읽어주기 (펼친 상태)
-  if (e.ctrlKey && (e.key === "q" || e.key === "Q")) { e.preventDefault(); shuffleDeck(); }  // Ctrl+Q → 섞기
+  if ((key === "e" || key === "E") && !e.ctrlKey && !e.altKey) { e.preventDefault(); fcEdit.click(); }
+  if (key === "s" || key === "S") { e.preventDefault(); speakWord(); }   // S → 단어(히라가나) 읽어주기
+  if (key === "d" || key === "D") { e.preventDefault(); speakEx(); }     // D → 예문(히라가나 문장) 읽어주기 (펼친 상태)
+  if (e.ctrlKey && (key === "q" || key === "Q")) { e.preventDefault(); shuffleDeck(); }  // Ctrl+Q → 섞기
 });
 
 /* 상단 ✕ → 창 숨김 */
